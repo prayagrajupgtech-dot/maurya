@@ -10,6 +10,8 @@ interface PersonData {
 }
 
 const IDCard = forwardRef<HTMLDivElement, { data: PersonData }>(({ data }, ref) => {
+  const addressFontSize = data.address.length > 80 ? "8px" : data.address.length > 45 ? "9px" : "10px";
+
   return (
     <div
       ref={ref}
@@ -51,7 +53,7 @@ const IDCard = forwardRef<HTMLDivElement, { data: PersonData }>(({ data }, ref) 
         </div>
       </div>
 
-      <div className="p-6 flex gap-6">
+      <div className="px-6 pt-5 pb-10 flex gap-6">
         <div className="shrink-0 flex flex-col items-center gap-2">
           <div
             className="w-[110px] h-[130px] rounded-md border-2 overflow-hidden"
@@ -79,7 +81,7 @@ const IDCard = forwardRef<HTMLDivElement, { data: PersonData }>(({ data }, ref) 
           </p>
         </div>
 
-        <div className="flex-1 pt-1 space-y-3">
+        <div className="flex-1 pt-1 space-y-2">
           <div>
             <p className="text-[8px] uppercase tracking-widest mb-0.5" style={{ color: "rgba(255,255,255,0.4)" }}>
               Name / नाम
@@ -109,8 +111,13 @@ const IDCard = forwardRef<HTMLDivElement, { data: PersonData }>(({ data }, ref) 
               Address / पता
             </p>
             <p
-              className="text-[10px] font-bold leading-tight uppercase line-clamp-3"
-              style={{ color: "rgba(255,255,255,0.8)" }}
+              className="font-bold uppercase break-words"
+              style={{
+                color: "rgba(255,255,255,0.8)",
+                fontSize: addressFontSize,
+                lineHeight: "1.25",
+                overflowWrap: "anywhere"
+              }}
             >
               {data.address || "-"}
             </p>
@@ -123,10 +130,10 @@ const IDCard = forwardRef<HTMLDivElement, { data: PersonData }>(({ data }, ref) 
         style={{ backgroundColor: "rgba(0,0,0,0.2)" }}
       >
         <p className="text-[7px] tracking-widest uppercase" style={{ color: "rgba(255,255,255,0.2)" }}>
-          Computer Generated ID
+          Digitally Generated Card
         </p>
         <p className="text-[7px] tracking-widest uppercase" style={{ color: "rgba(255,255,255,0.2)" }}>
-          Verification Required
+          Verify With QR Code
         </p>
       </div>
     </div>
