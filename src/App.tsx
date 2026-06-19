@@ -13,6 +13,8 @@ interface PersonData {
   address: string;
 }
 
+type ValidationErrors = Partial<Record<"name" | "phone" | "dob" | "address", string>>;
+
 // Compact Encoding (Only name, phone, idNumber for QR scan)
 function encodeData(data: Partial<PersonData>): string {
   const compact = `${data.name}|${data.phone}|${data.idNumber}`;
@@ -32,6 +34,57 @@ function decodeData(encoded: string): any {
   }
 }
 
+function normalizePhone(phone: string): string {
+  const digits = phone.replace(/\D/g, "");
+  return digits.length === 12 && digits.startsWith("91") ? digits.slice(2) : digits;
+}
+
+function validatePersonData(data: PersonData): ValidationErrors {
+  const errors: ValidationErrors = {};
+  const name = data.name.trim();
+  const phone = normalizePhone(data.phone);
+  const address = data.address.trim();
+
+  if (!name) {
+    errors.name = "Name is required.";
+  } else if (name.length < 3) {
+    errors.name = "Name must be at least 3 characters.";
+  }
+
+  if (!phone) {
+    errors.phone = "Phone number is required.";
+  } else if (!/^[6-9]\d{9}$/.test(phone)) {
+    errors.phone = "Enter a valid 10-digit Indian mobile number.";
+  }
+
+  if (!data.dob) {
+    errors.dob = "Date of birth is required.";
+  } else {
+    const dob = new Date(`${data.dob}T00:00:00`);
+    const today = new Date();
+    const oldestAllowed = new Date();
+    oldestAllowed.setFullYear(today.getFullYear() - 120);
+
+    if (Number.isNaN(dob.getTime())) {
+      errors.dob = "Enter a valid date of birth.";
+    } else if (dob > today) {
+      errors.dob = "Date of birth cannot be in the future.";
+    } else if (dob < oldestAllowed) {
+      errors.dob = "Date of birth looks too old.";
+    }
+  }
+
+  if (!address) {
+    errors.address = "Home address is required.";
+  } else if (address.length < 10) {
+    errors.address = "Enter a complete home address.";
+  } else if (!/[a-zA-Z]/.test(address) || !/\d/.test(address)) {
+    errors.address = "Address should include house/street details and area.";
+  }
+
+  return errors;
+}
+
 export default function App() {
   const [viewData, setViewData] = useState<any>(null);
   const [formData, setFormData] = useState<PersonData>({ 
@@ -44,6 +97,7 @@ export default function App() {
   });
   const [generatedData, setGeneratedData] = useState<PersonData | null>(null);
   const [activeTab, setActiveTab] = useState<"form" | "preview">("form");
+  const [errors, setErrors] = useState<ValidationErrors>({});
 
   const cardRef = useRef<HTMLDivElement>(null);
   const qrRef = useRef<HTMLDivElement>(null);
@@ -71,12 +125,21 @@ export default function App() {
   }
 
   const handleGenerate = () => {
-    if (!formData.name || !formData.phone) {
-      alert("Please fill name and phone");
+    const validationErrors = validatePersonData(formData);
+    setErrors(validationErrors);
+
+    if (Object.keys(validationErrors).length > 0) {
       return;
     }
+
     const idNumber = "ID-" + Math.random().toString(36).substring(2, 8).toUpperCase();
-    setGeneratedData({ ...formData, idNumber });
+    setGeneratedData({
+      ...formData,
+      name: formData.name.trim(),
+      phone: normalizePhone(formData.phone),
+      address: formData.address.trim(),
+      idNumber
+    });
     setActiveTab("preview");
   };
 
@@ -88,6 +151,21 @@ export default function App() {
   const updateGeneratedData = (field: keyof PersonData, value: string) => {
     setGeneratedData(prev => prev ? { ...prev, [field]: value } : prev);
   };
+
+  const updateFormData = (field: keyof PersonData, value: string) => {
+    setFormData(prev => ({ ...prev, [field]: value }));
+    setErrors(prev => {
+      if (!prev[field as keyof ValidationErrors]) return prev;
+      const next = { ...prev };
+      delete next[field as keyof ValidationErrors];
+      return next;
+    });
+  };
+
+  const fieldClassName = (field: keyof ValidationErrors) =>
+    `w-full bg-white/5 border rounded-2xl px-5 py-4 outline-none focus:border-amber-500/50 font-bold ${
+      errors[field] ? "border-red-500/70" : "border-white/10"
+    }`;
 
   return (
     <div className="min-h-screen bg-[#020617] text-white selection:bg-amber-500/30">
@@ -129,10 +207,11 @@ export default function App() {
                   <label className="text-[10px] font-black text-white/30 uppercase tracking-[3px]">Full Name</label>
                   <input 
                     value={formData.name}
-                    onChange={e => setFormData({...formData, name: e.target.value})}
-                    className="w-full bg-white/5 border border-white/10 rounded-2xl px-5 py-4 outline-none focus:border-amber-500/50 font-bold"
+                    onChange={e => updateFormData("name", e.target.value)}
+                    className={fieldClassName("name")}
                     placeholder="Enter name"
                   />
+                  {errors.name && <p className="text-xs font-bold text-red-300">{errors.name}</p>}
                 </div>
 
                 <div className="space-y-2">
@@ -140,10 +219,11 @@ export default function App() {
                   <input 
                     type="tel"
                     value={formData.phone}
-                    onChange={e => setFormData({...formData, phone: e.target.value})}
-                    className="w-full bg-white/5 border border-white/10 rounded-2xl px-5 py-4 outline-none focus:border-amber-500/50 font-bold"
-                    placeholder="Enter number"
+                    onChange={e => updateFormData("phone", e.target.value)}
+                    className={fieldClassName("phone")}
+                    placeholder="10-digit mobile number"
                   />
+                  {errors.phone && <p className="text-xs font-bold text-red-300">{errors.phone}</p>}
                 </div>
 
                 <div className="space-y-2">
@@ -151,19 +231,22 @@ export default function App() {
                   <input 
                     type="date"
                     value={formData.dob}
-                    onChange={e => setFormData({...formData, dob: e.target.value})}
-                    className="w-full bg-white/5 border border-white/10 rounded-2xl px-5 py-4 outline-none focus:border-amber-500/50 font-bold [color-scheme:dark]"
+                    onChange={e => updateFormData("dob", e.target.value)}
+                    max={new Date().toISOString().split("T")[0]}
+                    className={`${fieldClassName("dob")} [color-scheme:dark]`}
                   />
+                  {errors.dob && <p className="text-xs font-bold text-red-300">{errors.dob}</p>}
                 </div>
 
                 <div className="space-y-2">
                   <label className="text-[10px] font-black text-white/30 uppercase tracking-[3px]">Address</label>
-                  <input 
+                  <textarea
                     value={formData.address}
-                    onChange={e => setFormData({...formData, address: e.target.value})}
-                    className="w-full bg-white/5 border border-white/10 rounded-2xl px-5 py-4 outline-none focus:border-amber-500/50 font-bold"
-                    placeholder="City, State"
+                    onChange={e => updateFormData("address", e.target.value)}
+                    className={`${fieldClassName("address")} min-h-28 resize-none`}
+                    placeholder="House no, street, city, state"
                   />
+                  {errors.address && <p className="text-xs font-bold text-red-300">{errors.address}</p>}
                 </div>
               </div>
 
