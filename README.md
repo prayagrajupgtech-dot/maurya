@@ -37,3 +37,20 @@ After pushing to GitHub:
 4. Push to the `main` branch.
 
 The deployed app URL will be public, so QR codes generated from that deployed URL can open on mobile without needing the same Wi-Fi.
+
+## Netlify
+
+You can also deploy from GitHub to Netlify. This repo includes `netlify.toml`, so Netlify should detect:
+
+- Build command: `npm run build`
+- Publish directory: `dist`
+
+Steps:
+
+1. Push this repo to GitHub.
+2. Open Netlify and choose `Add new site > Import an existing project`.
+3. Select GitHub and choose this repository.
+4. Keep the detected build settings.
+5. Deploy the site.
+
+After deployment, open the Netlify URL first and generate QR codes from that deployed app URL.
