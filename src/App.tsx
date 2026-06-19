@@ -13,15 +13,22 @@ interface PersonData {
   address: string;
 }
 
-type ValidationErrors = Partial<Record<"name" | "phone" | "dob" | "address", string>>;
-
-// Compact Encoding (Only name, phone, idNumber for QR scan)
-function encodeData(data: Partial<PersonData>): string {
-  const compact = `${data.name}|${data.phone}|${data.idNumber}`;
-  return btoa(encodeURIComponent(compact)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+interface GeneratedPersonData extends PersonData {
+  editToken: string;
+  recordId: string;
 }
 
-// Decoding
+interface VerificationData {
+  databaseVerified: boolean;
+  idNumber: string;
+  name: string;
+  phone: string;
+  status: "active" | "expired" | "blocked" | "legacy";
+}
+
+type ValidationErrors = Partial<Record<"name" | "phone" | "dob" | "address", string>>;
+
+// Decodes QR codes generated before database verification was introduced.
 function decodeData(encoded: string): any {
   try {
     let base64 = encoded.replace(/-/g, "+").replace(/_/g, "/");
@@ -86,7 +93,8 @@ function validatePersonData(data: PersonData): ValidationErrors {
 }
 
 export default function App() {
-  const [viewData, setViewData] = useState<any>(null);
+  const [viewData, setViewData] = useState<VerificationData | null>(null);
+  const [verificationState, setVerificationState] = useState<"idle" | "loading" | "not-found" | "error">("idle");
   const [formData, setFormData] = useState<PersonData>({ 
     name: "", 
     phone: "", 
@@ -95,62 +103,201 @@ export default function App() {
     dob: "",
     address: ""
   });
-  const [generatedData, setGeneratedData] = useState<PersonData | null>(null);
+  const [generatedData, setGeneratedData] = useState<GeneratedPersonData | null>(null);
   const [activeTab, setActiveTab] = useState<"form" | "preview">("form");
   const [errors, setErrors] = useState<ValidationErrors>({});
   const [isDownloadingCard, setIsDownloadingCard] = useState(false);
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [isSavingRecord, setIsSavingRecord] = useState(false);
+  const [formError, setFormError] = useState("");
+  const [recordMessage, setRecordMessage] = useState("");
 
   const cardRef = useRef<HTMLDivElement>(null);
   const qrRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const handleRoute = () => {
+    let requestNumber = 0;
+
+    const handleRoute = async () => {
+      const currentRequest = ++requestNumber;
       const hash = window.location.hash;
-      if (hash.startsWith("#/v/")) {
+      if (hash.startsWith("#/verify/")) {
+        const recordId = hash.split("#/verify/")[1];
+        setViewData(null);
+        setVerificationState("loading");
+
+        try {
+          const response = await fetch(`/.netlify/functions/verify-card?id=${encodeURIComponent(recordId)}`, {
+            headers: { Accept: "application/json" }
+          });
+          const result = await response.json();
+          if (currentRequest !== requestNumber) return;
+
+          if (response.status === 404) {
+            setVerificationState("not-found");
+            return;
+          }
+          if (!response.ok) {
+            setVerificationState("error");
+            return;
+          }
+
+          setViewData({
+            databaseVerified: true,
+            idNumber: result.cardNumber,
+            name: result.name,
+            phone: result.phone,
+            status: result.status
+          });
+          setVerificationState("idle");
+        } catch {
+          if (currentRequest === requestNumber) {
+            setVerificationState("error");
+          }
+        }
+      } else if (hash.startsWith("#/v/")) {
         const encoded = hash.split("#/v/")[1];
         if (encoded) {
           const decoded = decodeData(encoded);
-          if (decoded) setViewData(decoded);
+          if (decoded) {
+            setViewData({ ...decoded, databaseVerified: false, status: "legacy" });
+            setVerificationState("idle");
+          }
         }
       } else {
         setViewData(null);
+        setVerificationState("idle");
       }
     };
-    handleRoute();
+    void handleRoute();
     window.addEventListener("hashchange", handleRoute);
-    return () => window.removeEventListener("hashchange", handleRoute);
+    return () => {
+      requestNumber += 1;
+      window.removeEventListener("hashchange", handleRoute);
+    };
   }, []);
 
   if (viewData) {
     return <PersonDetailView data={viewData} />;
   }
 
-  const handleGenerate = () => {
+  if (verificationState !== "idle") {
+    const messages = {
+      error: ["Verification unavailable", "The verification service could not be reached. Please try again."],
+      loading: ["Checking record", "Fetching the latest card status..."],
+      "not-found": ["Record not found", "This QR code does not match an existing verification record."]
+    };
+    const [title, message] = messages[verificationState];
+    return (
+      <div className="min-h-screen bg-[#020617] text-white flex items-center justify-center p-6">
+        <div className="max-w-md text-center border border-white/10 bg-white/5 rounded-3xl p-10">
+          <h1 className="text-2xl font-black uppercase">{title}</h1>
+          <p className="mt-3 text-sm text-white/50">{message}</p>
+          {verificationState !== "loading" && (
+            <button
+              onClick={() => {
+                window.location.hash = "";
+                window.location.reload();
+              }}
+              className="mt-8 bg-amber-500 text-black font-black uppercase text-xs tracking-widest px-6 py-3 rounded-xl"
+            >
+              Return Home
+            </button>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  const handleGenerate = async () => {
     const validationErrors = validatePersonData(formData);
     setErrors(validationErrors);
+    setFormError("");
 
     if (Object.keys(validationErrors).length > 0) {
       return;
     }
 
-    const idNumber = "ID-" + Math.random().toString(36).substring(2, 8).toUpperCase();
-    setGeneratedData({
+    setIsGenerating(true);
+    const normalizedData = {
       ...formData,
       name: formData.name.trim(),
       phone: normalizePhone(formData.phone),
-      address: formData.address.trim(),
-      idNumber
-    });
-    setActiveTab("preview");
+      address: formData.address.trim()
+    };
+
+    try {
+      const response = await fetch("/.netlify/functions/create-card", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          address: normalizedData.address,
+          dateOfBirth: normalizedData.dob,
+          name: normalizedData.name,
+          phone: normalizedData.phone
+        })
+      });
+      const result = await response.json();
+      if (!response.ok) {
+        throw new Error(result.error || "Could not create the verification record.");
+      }
+
+      setGeneratedData({
+        ...normalizedData,
+        editToken: result.editToken,
+        idNumber: result.cardNumber,
+        recordId: result.id
+      });
+      setRecordMessage("");
+      setActiveTab("preview");
+    } catch (error) {
+      setFormError(error instanceof Error ? error.message : "Could not create the verification record.");
+    } finally {
+      setIsGenerating(false);
+    }
   };
 
-  const getQrUrl = (data: Partial<PersonData>) => {
+  const getQrUrl = (data: GeneratedPersonData) => {
     const baseUrl = window.location.origin + window.location.pathname;
-    return `${baseUrl}#/v/${encodeData(data)}`;
+    return `${baseUrl}#/verify/${data.recordId}`;
   };
 
   const updateGeneratedData = (field: keyof PersonData, value: string) => {
     setGeneratedData(prev => prev ? { ...prev, [field]: value } : prev);
+    setRecordMessage("");
+  };
+
+  const saveGeneratedDetails = async () => {
+    if (!generatedData || isSavingRecord) return;
+
+    const phone = normalizePhone(generatedData.phone);
+    if (generatedData.name.trim().length < 3 || !/^[6-9]\d{9}$/.test(phone)) {
+      setRecordMessage("Enter a valid name and 10-digit phone number.");
+      return;
+    }
+
+    setIsSavingRecord(true);
+    setRecordMessage("");
+    try {
+      const response = await fetch("/.netlify/functions/update-card", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          editToken: generatedData.editToken,
+          id: generatedData.recordId,
+          name: generatedData.name.trim(),
+          phone
+        })
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || "Could not save changes.");
+      setGeneratedData(prev => prev ? { ...prev, name: prev.name.trim(), phone } : prev);
+      setRecordMessage("Scan details saved to the verification database.");
+    } catch (error) {
+      setRecordMessage(error instanceof Error ? error.message : "Could not save changes.");
+    } finally {
+      setIsSavingRecord(false);
+    }
   };
 
   const downloadIdCard = async () => {
@@ -317,10 +464,14 @@ export default function App() {
 
               <button 
                 onClick={handleGenerate}
-                className="w-full bg-amber-500 text-black font-black py-5 rounded-[2rem] text-lg hover:bg-amber-400 hover:scale-[1.01] transition-all shadow-2xl shadow-amber-500/20"
+                disabled={isGenerating}
+                className="w-full bg-amber-500 text-black font-black py-5 rounded-[2rem] text-lg hover:bg-amber-400 hover:scale-[1.01] transition-all shadow-2xl shadow-amber-500/20 disabled:cursor-wait disabled:opacity-60"
               >
-                GENERATE ID & QR
+                {isGenerating ? "SAVING VERIFICATION RECORD..." : "GENERATE ID & QR"}
               </button>
+              {formError && (
+                <p className="text-center text-sm font-bold text-red-300">{formError}</p>
+              )}
             </div>
           </div>
         ) : (
@@ -362,6 +513,19 @@ export default function App() {
                         placeholder="Enter number"
                       />
                     </div>
+                  </div>
+
+                  <div className="mt-6 flex flex-col sm:flex-row sm:items-center gap-4">
+                    <button
+                      onClick={saveGeneratedDetails}
+                      disabled={isSavingRecord}
+                      className="bg-white text-black font-black uppercase tracking-[3px] px-6 py-3 rounded-2xl transition-all text-[10px] disabled:cursor-wait disabled:opacity-60"
+                    >
+                      {isSavingRecord ? "Saving..." : "Save Scan Details"}
+                    </button>
+                    {recordMessage && (
+                      <p className="text-xs font-bold text-white/60">{recordMessage}</p>
+                    )}
                   </div>
 
                   <div className="mt-6 bg-black/20 border border-white/10 rounded-2xl p-4">

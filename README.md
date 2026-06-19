@@ -1,6 +1,6 @@
 # QR and ID Card Generator
 
-React + Vite app for creating ID cards and QR verification links. The QR opens a read-only verification page with the generated person's name and phone number.
+React + Vite app for creating ID cards and database-backed QR verification links. Netlify Functions keep the Supabase secret key out of the browser bundle.
 
 ## Local Development
 
@@ -9,13 +9,7 @@ npm install
 npm run dev
 ```
 
-For testing from a phone on the same Wi-Fi:
-
-```powershell
-powershell -ExecutionPolicy Bypass -File .\run-dev-network.ps1
-```
-
-Then open the network URL shown by Vite on your PC and generate the QR from that URL.
+The Vite server only runs the frontend. Use Netlify Dev when testing card creation and verification Functions locally.
 
 ## Build
 
@@ -25,32 +19,33 @@ npm run build
 
 The production files are generated in `dist/`.
 
-## GitHub Pages
-
-This repo includes a GitHub Actions workflow at `.github/workflows/deploy.yml`.
-
-After pushing to GitHub:
-
-1. Go to repository `Settings`.
-2. Open `Pages`.
-3. Set `Source` to `GitHub Actions`.
-4. Push to the `main` branch.
-
-The deployed app URL will be public, so QR codes generated from that deployed URL can open on mobile without needing the same Wi-Fi.
-
 ## Netlify
 
-You can also deploy from GitHub to Netlify. This repo includes `netlify.toml`, so Netlify should detect:
+This repo includes `netlify.toml`, so Netlify detects:
 
 - Build command: `npm run build`
 - Publish directory: `dist`
+- Functions directory: `netlify/functions`
 
-Steps:
+Set these environment variables in Netlify before deploying:
 
-1. Push this repo to GitHub.
-2. Open Netlify and choose `Add new site > Import an existing project`.
-3. Select GitHub and choose this repository.
-4. Keep the detected build settings.
-5. Deploy the site.
+```text
+SUPABASE_URL
+SUPABASE_SECRET_KEY
+```
 
-After deployment, open the Netlify URL first and generate QR codes from that deployed app URL.
+`SUPABASE_SECRET_KEY` must only be available to server-side Functions and must never use a `VITE_` prefix.
+
+## Supabase
+
+Run [supabase/schema.sql](supabase/schema.sql) in the Supabase SQL Editor. The app uses:
+
+- `create-card` to create an active database record.
+- `verify-card` to read the latest public verification status.
+- `update-card` to persist edited scan-page name and phone details.
+
+New QR codes contain only a random database UUID. QR codes created by older app versions remain readable as legacy, non-database-verified records.
+
+## Security
+
+The database secret is protected by Netlify Functions and the table denies direct anonymous access. The generator UI itself is currently public; add issuer authentication before allowing untrusted users to access a commercial card-issuance workflow.
