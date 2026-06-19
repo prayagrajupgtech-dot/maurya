@@ -1,0 +1,14 @@
+node_modules/
+dist/
+.npm-cache/
+
+*.log
+vite-dev*.log
+run-dev*.log
+
+.env
+.env.*
+!.env.example
+
+.DS_Store
+Thumbs.db
