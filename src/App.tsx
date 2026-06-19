@@ -98,6 +98,7 @@ export default function App() {
   const [generatedData, setGeneratedData] = useState<PersonData | null>(null);
   const [activeTab, setActiveTab] = useState<"form" | "preview">("form");
   const [errors, setErrors] = useState<ValidationErrors>({});
+  const [isDownloadingCard, setIsDownloadingCard] = useState(false);
 
   const cardRef = useRef<HTMLDivElement>(null);
   const qrRef = useRef<HTMLDivElement>(null);
@@ -150,6 +151,44 @@ export default function App() {
 
   const updateGeneratedData = (field: keyof PersonData, value: string) => {
     setGeneratedData(prev => prev ? { ...prev, [field]: value } : prev);
+  };
+
+  const downloadIdCard = async () => {
+    if (!cardRef.current || !generatedData || isDownloadingCard) return;
+
+    setIsDownloadingCard(true);
+    try {
+      await document.fonts.ready;
+      await Promise.all(
+        Array.from(cardRef.current.querySelectorAll("img")).map(image =>
+          image.complete ? Promise.resolve() : image.decode()
+        )
+      );
+
+      const canvas = await html2canvas(cardRef.current, {
+        backgroundColor: null,
+        logging: false,
+        scale: 2,
+        useCORS: true
+      });
+      const blob = await new Promise<Blob>((resolve, reject) => {
+        canvas.toBlob(result => result ? resolve(result) : reject(new Error("Could not create ID card image.")), "image/png");
+      });
+      const objectUrl = URL.createObjectURL(blob);
+      const safeName = generatedData.name.trim().replace(/[^a-zA-Z0-9_-]+/g, "-") || "id";
+      const link = document.createElement("a");
+      link.download = `card-${safeName}.png`;
+      link.href = objectUrl;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
+    } catch (error) {
+      console.error("ID card download failed", error);
+      window.alert("ID card download failed. Please try again.");
+    } finally {
+      setIsDownloadingCard(false);
+    }
   };
 
   const updateFormData = (field: keyof PersonData, value: string) => {
@@ -338,17 +377,11 @@ export default function App() {
                     <IDCard ref={cardRef} data={generatedData} />
                   </div>
                   <button 
-                    onClick={() => {
-                      html2canvas(cardRef.current!, { scale: 2 }).then(canvas => {
-                        const link = document.createElement("a");
-                        link.download = `card-${generatedData.name}.png`;
-                        link.href = canvas.toDataURL();
-                        link.click();
-                      });
-                    }}
-                    className="mt-12 bg-white text-black font-black uppercase tracking-[3px] px-10 py-4 rounded-2xl hover:scale-105 transition-all shadow-2xl"
+                    onClick={downloadIdCard}
+                    disabled={isDownloadingCard}
+                    className="mt-12 bg-white text-black font-black uppercase tracking-[3px] px-10 py-4 rounded-2xl hover:scale-105 transition-all shadow-2xl disabled:cursor-wait disabled:opacity-60"
                   >
-                    Download ID Card
+                    {isDownloadingCard ? "Preparing..." : "Download ID Card"}
                   </button>
                 </div>
 
