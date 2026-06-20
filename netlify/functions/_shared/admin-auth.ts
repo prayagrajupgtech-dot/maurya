@@ -1,4 +1,4 @@
-import { jsonResponse, sha256 } from "./http";
+import { jsonResponse, sha256 } from "./http.js";
 
 const COOKIE_NAME = "maurya_admin_session";
 const SESSION_DURATION_SECONDS = 12 * 60 * 60;

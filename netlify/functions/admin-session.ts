@@ -3,8 +3,8 @@ import {
   createAdminSessionCookie,
   isAdminRequest,
   verifyAdminPassword
-} from "./_shared/admin-auth";
-import { jsonResponse, readJsonBody } from "./_shared/http";
+} from "./_shared/admin-auth.js";
+import { jsonResponse, readJsonBody } from "./_shared/http.js";
 
 export default async (request: Request) => {
   try {

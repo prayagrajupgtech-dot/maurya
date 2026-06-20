@@ -1,3 +1,3 @@
-import handler from "../netlify/functions/update-card";
+import handler from "../netlify/functions/update-card.js";
 
 export default handler;

@@ -1,5 +1,5 @@
-import { isUuid, jsonResponse } from "./_shared/http";
-import { getSupabaseAdmin } from "./_shared/supabase";
+import { isUuid, jsonResponse } from "./_shared/http.js";
+import { getSupabaseAdmin } from "./_shared/supabase.js";
 
 export default async (request: Request) => {
   if (request.method !== "GET") {

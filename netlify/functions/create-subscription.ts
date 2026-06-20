@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
-import { jsonResponse, readJsonBody } from "./_shared/http";
-import { createRazorpaySubscription, getRazorpayConfig } from "./_shared/razorpay";
-import { getSupabaseAdmin } from "./_shared/supabase";
+import { jsonResponse, readJsonBody } from "./_shared/http.js";
+import { createRazorpaySubscription, getRazorpayConfig } from "./_shared/razorpay.js";
+import { getSupabaseAdmin } from "./_shared/supabase.js";
 
 function validateCustomer(body: Record<string, unknown>) {
   const name = typeof body.name === "string" ? body.name.trim() : "";

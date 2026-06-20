@@ -1,6 +1,6 @@
-import { jsonResponse, readJsonBody } from "./_shared/http";
-import { getRazorpayConfig, verifyHmac } from "./_shared/razorpay";
-import { getSupabaseAdmin } from "./_shared/supabase";
+import { jsonResponse, readJsonBody } from "./_shared/http.js";
+import { getRazorpayConfig, verifyHmac } from "./_shared/razorpay.js";
+import { getSupabaseAdmin } from "./_shared/supabase.js";
 
 export default async (request: Request) => {
   if (request.method !== "POST") return jsonResponse({ error: "Method not allowed." }, 405);
