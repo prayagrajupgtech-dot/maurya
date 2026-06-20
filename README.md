@@ -36,9 +36,15 @@ RAZORPAY_KEY_ID
 RAZORPAY_KEY_SECRET
 RAZORPAY_PLAN_ID
 RAZORPAY_WEBHOOK_SECRET
+ADMIN_PASSWORD
+ADMIN_SESSION_SECRET
 ```
 
 `SUPABASE_SECRET_KEY`, `RAZORPAY_KEY_SECRET`, and `RAZORPAY_WEBHOOK_SECRET` must only be available to server-side Functions and must never use a `VITE_` prefix.
+
+The public root route shows the membership plan. Administrators can open `#/admin` and sign in with
+`ADMIN_PASSWORD`; `ADMIN_SESSION_SECRET` signs the 12-hour HttpOnly admin session cookie. Keep both values
+server-only and use long, unique production secrets.
 
 ## Supabase
 
@@ -52,7 +58,7 @@ New QR codes contain only a random database UUID. QR codes created by older app 
 
 ## Security
 
-The database secret is protected by Netlify Functions and the table denies direct anonymous access. The generator UI itself is currently public; add issuer authentication before allowing untrusted users to access a commercial card-issuance workflow.
+The database secret is protected by Netlify Functions and the table denies direct anonymous access. The generator UI and card-creation endpoint require an authenticated admin session.
 
 ## Razorpay Test Mode
 

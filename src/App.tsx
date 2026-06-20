@@ -5,6 +5,7 @@ import IDCard from "./components/IDCard";
 import IDCardBack from "./components/IDCardBack";
 import PersonDetailView from "./components/PersonDetailView";
 import PlansPage from "./components/PlansPage";
+import AdminLogin from "./components/AdminLogin";
 
 interface PersonData {
   name: string;
@@ -109,7 +110,9 @@ function validatePersonData(data: PersonData): ValidationErrors {
 export default function App() {
   const [viewData, setViewData] = useState<VerificationData | null>(null);
   const [verificationState, setVerificationState] = useState<"idle" | "loading" | "not-found" | "error">("idle");
-  const [isPlansPage, setIsPlansPage] = useState(false);
+  const [isPlansPage, setIsPlansPage] = useState(true);
+  const [isAdminRoute, setIsAdminRoute] = useState(false);
+  const [adminSession, setAdminSession] = useState<"checking" | "authenticated" | "unauthenticated">("checking");
   const [formData, setFormData] = useState<PersonData>({ 
     name: "", 
     phone: "", 
@@ -139,12 +142,31 @@ export default function App() {
     const handleRoute = async () => {
       const currentRequest = ++requestNumber;
       const hash = window.location.hash;
-      if (hash === "#/plans") {
+      if (hash === "#/admin") {
+        setIsPlansPage(false);
+        setIsAdminRoute(true);
+        setViewData(null);
+        setVerificationState("idle");
+        setAdminSession("checking");
+        try {
+          const response = await fetch("/.netlify/functions/admin-session", {
+            headers: { Accept: "application/json" }
+          });
+          const result = await response.json();
+          if (currentRequest === requestNumber) {
+            setAdminSession(response.ok && result.authenticated ? "authenticated" : "unauthenticated");
+          }
+        } catch {
+          if (currentRequest === requestNumber) setAdminSession("unauthenticated");
+        }
+      } else if (hash === "#/plans" || hash === "") {
         setIsPlansPage(true);
+        setIsAdminRoute(false);
         setViewData(null);
         setVerificationState("idle");
       } else if (hash.startsWith("#/verify/")) {
         setIsPlansPage(false);
+        setIsAdminRoute(false);
         const recordId = hash.split("#/verify/")[1];
         setViewData(null);
         setVerificationState("loading");
@@ -180,6 +202,7 @@ export default function App() {
         }
       } else if (hash.startsWith("#/v/")) {
         setIsPlansPage(false);
+        setIsAdminRoute(false);
         const encoded = hash.split("#/v/")[1];
         if (encoded) {
           const decoded = decodeData(encoded);
@@ -189,7 +212,8 @@ export default function App() {
           }
         }
       } else {
-        setIsPlansPage(false);
+        setIsPlansPage(true);
+        setIsAdminRoute(false);
         setViewData(null);
         setVerificationState("idle");
       }
@@ -204,6 +228,18 @@ export default function App() {
 
   if (isPlansPage) {
     return <PlansPage />;
+  }
+
+  if (isAdminRoute && adminSession === "checking") {
+    return (
+      <div className="min-h-screen bg-[#020617] text-white flex items-center justify-center p-6">
+        <p className="text-xs font-black uppercase tracking-[3px] text-white/40">Checking admin access...</p>
+      </div>
+    );
+  }
+
+  if (isAdminRoute && adminSession === "unauthenticated") {
+    return <AdminLogin onAuthenticated={() => setAdminSession("authenticated")} />;
   }
 
   if (viewData) {
@@ -420,6 +456,16 @@ export default function App() {
               className={`px-6 py-2 rounded-lg text-xs font-black transition-all ${activeTab === "preview" ? "bg-amber-500 text-black" : "text-white/40"}`}
             >
               PREVIEW
+            </button>
+            <button
+              onClick={async () => {
+                await fetch("/.netlify/functions/admin-session", { method: "DELETE" });
+                setAdminSession("unauthenticated");
+                window.location.hash = "";
+              }}
+              className="px-4 py-2 rounded-lg text-xs font-black text-white/40 hover:text-white transition-colors"
+            >
+              LOG OUT
             </button>
           </div>
         </div>

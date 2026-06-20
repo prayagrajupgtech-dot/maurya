@@ -93,17 +93,11 @@ export default function PlansPage() {
   return (
     <div className="min-h-screen bg-[#f8fafc] text-slate-900">
       <header className="bg-[#111827] text-white border-b-4 border-red-600">
-        <div className="max-w-4xl mx-auto px-6 py-6 flex items-center justify-between gap-4">
+        <div className="max-w-4xl mx-auto px-6 py-6">
           <div>
             <p className="text-lg font-black uppercase">Maurya and Company</p>
             <p className="text-sm font-bold text-amber-400">समस्या निवारण</p>
           </div>
-          <button
-            onClick={() => { window.location.hash = ""; }}
-            className="text-xs font-black uppercase tracking-widest text-white/60 hover:text-white"
-          >
-            Back
-          </button>
         </div>
       </header>
 
