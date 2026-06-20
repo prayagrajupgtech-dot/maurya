@@ -2,7 +2,9 @@ import { useState, useRef, useEffect } from "react";
 import { QRCodeCanvas } from "qrcode.react";
 import html2canvas from "html2canvas";
 import IDCard from "./components/IDCard";
+import IDCardBack from "./components/IDCardBack";
 import PersonDetailView from "./components/PersonDetailView";
+import PlansPage from "./components/PlansPage";
 
 interface PersonData {
   name: string;
@@ -96,6 +98,7 @@ function validatePersonData(data: PersonData): ValidationErrors {
 export default function App() {
   const [viewData, setViewData] = useState<VerificationData | null>(null);
   const [verificationState, setVerificationState] = useState<"idle" | "loading" | "not-found" | "error">("idle");
+  const [isPlansPage, setIsPlansPage] = useState(false);
   const [formData, setFormData] = useState<PersonData>({ 
     name: "", 
     phone: "", 
@@ -108,13 +111,15 @@ export default function App() {
   const [generatedData, setGeneratedData] = useState<GeneratedPersonData | null>(null);
   const [activeTab, setActiveTab] = useState<"form" | "preview">("form");
   const [errors, setErrors] = useState<ValidationErrors>({});
-  const [isDownloadingCard, setIsDownloadingCard] = useState(false);
+  const [downloadingSide, setDownloadingSide] = useState<"front" | "back" | null>(null);
+  const [isCardFlipped, setIsCardFlipped] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [isSavingRecord, setIsSavingRecord] = useState(false);
   const [formError, setFormError] = useState("");
   const [recordMessage, setRecordMessage] = useState("");
 
-  const cardRef = useRef<HTMLDivElement>(null);
+  const frontCardRef = useRef<HTMLDivElement>(null);
+  const backCardRef = useRef<HTMLDivElement>(null);
   const qrRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -123,7 +128,12 @@ export default function App() {
     const handleRoute = async () => {
       const currentRequest = ++requestNumber;
       const hash = window.location.hash;
-      if (hash.startsWith("#/verify/")) {
+      if (hash === "#/plans") {
+        setIsPlansPage(true);
+        setViewData(null);
+        setVerificationState("idle");
+      } else if (hash.startsWith("#/verify/")) {
+        setIsPlansPage(false);
         const recordId = hash.split("#/verify/")[1];
         setViewData(null);
         setVerificationState("loading");
@@ -158,6 +168,7 @@ export default function App() {
           }
         }
       } else if (hash.startsWith("#/v/")) {
+        setIsPlansPage(false);
         const encoded = hash.split("#/v/")[1];
         if (encoded) {
           const decoded = decodeData(encoded);
@@ -167,6 +178,7 @@ export default function App() {
           }
         }
       } else {
+        setIsPlansPage(false);
         setViewData(null);
         setVerificationState("idle");
       }
@@ -178,6 +190,10 @@ export default function App() {
       window.removeEventListener("hashchange", handleRoute);
     };
   }, []);
+
+  if (isPlansPage) {
+    return <PlansPage />;
+  }
 
   if (viewData) {
     return <PersonDetailView data={viewData} />;
@@ -264,6 +280,11 @@ export default function App() {
     return `${baseUrl}#/verify/${data.recordId}`;
   };
 
+  const getSubscriptionUrl = () => {
+    const baseUrl = window.location.origin + window.location.pathname;
+    return `${baseUrl}#/plans`;
+  };
+
   const updateGeneratedData = (field: keyof PersonData, value: string) => {
     setGeneratedData(prev => prev ? { ...prev, [field]: value } : prev);
     setRecordMessage("");
@@ -302,19 +323,20 @@ export default function App() {
     }
   };
 
-  const downloadIdCard = async () => {
-    if (!cardRef.current || !generatedData || isDownloadingCard) return;
+  const downloadIdCard = async (side: "front" | "back") => {
+    const cardElement = side === "front" ? frontCardRef.current : backCardRef.current;
+    if (!cardElement || !generatedData || downloadingSide) return;
 
-    setIsDownloadingCard(true);
+    setDownloadingSide(side);
     try {
       await document.fonts.ready;
       await Promise.all(
-        Array.from(cardRef.current.querySelectorAll("img")).map(image =>
+        Array.from(cardElement.querySelectorAll("img")).map(image =>
           image.complete ? Promise.resolve() : image.decode()
         )
       );
 
-      const canvas = await html2canvas(cardRef.current, {
+      const canvas = await html2canvas(cardElement, {
         backgroundColor: null,
         logging: false,
         scale: 2,
@@ -326,7 +348,7 @@ export default function App() {
       const objectUrl = URL.createObjectURL(blob);
       const safeName = generatedData.name.trim().replace(/[^a-zA-Z0-9_-]+/g, "-") || "id";
       const link = document.createElement("a");
-      link.download = `card-${safeName}.png`;
+      link.download = `card-${safeName}-${side}.png`;
       link.href = objectUrl;
       document.body.appendChild(link);
       link.click();
@@ -336,7 +358,7 @@ export default function App() {
       console.error("ID card download failed", error);
       window.alert("ID card download failed. Please try again.");
     } finally {
-      setIsDownloadingCard(false);
+      setDownloadingSide(null);
     }
   };
 
@@ -575,17 +597,61 @@ export default function App() {
 
                 {/* ID Card Display */}
                 <div className="bg-white/5 border border-white/10 rounded-[3rem] p-10 flex flex-col items-center">
-                  <span className="text-[10px] font-black text-white/20 uppercase tracking-[5px] mb-10">Digital ID Card</span>
-                  <div className="scale-[0.6] sm:scale-100 origin-center">
-                    <IDCard ref={cardRef} data={generatedData} />
+                  <div className="w-full flex items-center justify-between gap-4 mb-10">
+                    <span className="text-[10px] font-black text-white/20 uppercase tracking-[5px]">Digital ID Card</span>
+                    <button
+                      onClick={() => setIsCardFlipped(value => !value)}
+                      className="bg-amber-500 text-black text-[10px] font-black uppercase tracking-[2px] px-4 py-2 rounded-xl"
+                    >
+                      Flip Card
+                    </button>
                   </div>
-                  <button 
-                    onClick={downloadIdCard}
-                    disabled={isDownloadingCard}
-                    className="mt-12 bg-white text-black font-black uppercase tracking-[3px] px-10 py-4 rounded-2xl hover:scale-105 transition-all shadow-2xl disabled:cursor-wait disabled:opacity-60"
-                  >
-                    {isDownloadingCard ? "Preparing..." : "Download ID Card"}
-                  </button>
+
+                  <div className="w-[300px] h-[180px] sm:w-[500px] sm:h-[300px]">
+                    <div className="w-[500px] h-[300px] scale-[0.6] sm:scale-100 origin-top-left" style={{ perspective: "1200px" }}>
+                      <div
+                        className="relative w-full h-full transition-transform duration-700"
+                        style={{
+                          transform: isCardFlipped ? "rotateY(180deg)" : "rotateY(0deg)",
+                          transformStyle: "preserve-3d"
+                        }}
+                      >
+                        <div className="absolute inset-0" style={{ backfaceVisibility: "hidden" }}>
+                          <IDCard ref={frontCardRef} data={generatedData} />
+                        </div>
+                        <div
+                          className="absolute inset-0"
+                          style={{ backfaceVisibility: "hidden", transform: "rotateY(180deg)" }}
+                        >
+                          <IDCardBack
+                            ref={backCardRef}
+                            cardNumber={generatedData.idNumber}
+                            subscriptionUrl={getSubscriptionUrl()}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <p className="mt-5 text-[10px] font-bold uppercase tracking-widest text-white/30">
+                    Showing {isCardFlipped ? "back" : "front"} side
+                  </p>
+                  <div className="mt-7 flex flex-col sm:flex-row gap-3">
+                    <button
+                      onClick={() => downloadIdCard("front")}
+                      disabled={downloadingSide !== null}
+                      className="bg-white text-black font-black uppercase tracking-[2px] px-6 py-3 rounded-2xl transition-all disabled:cursor-wait disabled:opacity-60 text-[10px]"
+                    >
+                      {downloadingSide === "front" ? "Preparing..." : "Download Front"}
+                    </button>
+                    <button
+                      onClick={() => downloadIdCard("back")}
+                      disabled={downloadingSide !== null}
+                      className="bg-white text-black font-black uppercase tracking-[2px] px-6 py-3 rounded-2xl transition-all disabled:cursor-wait disabled:opacity-60 text-[10px]"
+                    >
+                      {downloadingSide === "back" ? "Preparing..." : "Download Back"}
+                    </button>
+                  </div>
                 </div>
 
                 {/* QR Section */}

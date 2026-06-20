@@ -32,9 +32,13 @@ Set these environment variables in Netlify before deploying:
 ```text
 SUPABASE_URL
 SUPABASE_SECRET_KEY
+RAZORPAY_KEY_ID
+RAZORPAY_KEY_SECRET
+RAZORPAY_PLAN_ID
+RAZORPAY_WEBHOOK_SECRET
 ```
 
-`SUPABASE_SECRET_KEY` must only be available to server-side Functions and must never use a `VITE_` prefix.
+`SUPABASE_SECRET_KEY`, `RAZORPAY_KEY_SECRET`, and `RAZORPAY_WEBHOOK_SECRET` must only be available to server-side Functions and must never use a `VITE_` prefix.
 
 ## Supabase
 
@@ -49,3 +53,15 @@ New QR codes contain only a random database UUID. QR codes created by older app 
 ## Security
 
 The database secret is protected by Netlify Functions and the table denies direct anonymous access. The generator UI itself is currently public; add issuer authentication before allowing untrusted users to access a commercial card-issuance workflow.
+
+## Razorpay Test Mode
+
+The `#/plans` route creates a Razorpay subscription with a 30-day delayed start and 60 monthly billing cycles. Configure a Razorpay webhook at:
+
+```text
+https://YOUR_SITE/.netlify/functions/razorpay-webhook
+```
+
+Use the same webhook secret stored in `RAZORPAY_WEBHOOK_SECRET`. Subscribe to subscription lifecycle events, including authenticated, activated, charged, pending, halted, completed, and cancelled. Run the subscription tables in [supabase/schema.sql](supabase/schema.sql) before testing.
+
+Do not enable live credentials until authentication, customer cancellation, support, privacy, refund, and production monitoring workflows are complete.
