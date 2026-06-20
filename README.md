@@ -42,9 +42,10 @@ ADMIN_SESSION_SECRET
 
 `SUPABASE_SECRET_KEY`, `RAZORPAY_KEY_SECRET`, and `RAZORPAY_WEBHOOK_SECRET` must only be available to server-side Functions and must never use a `VITE_` prefix.
 
-The public root route shows the membership plan. Administrators can open `#/admin` and sign in with
-`ADMIN_PASSWORD`; `ADMIN_SESSION_SECRET` signs the 12-hour HttpOnly admin session cookie. Keep both values
-server-only and use long, unique production secrets.
+The root route and `#/admin` show the administrator sign-in. The card generator only renders after a valid
+admin session. Customers reach the membership page through the `#/plans` URL printed on the back of each ID
+card. `ADMIN_SESSION_SECRET` signs the 12-hour HttpOnly admin session cookie. Keep both admin values server-only
+and use long, unique production secrets.
 
 ## Supabase
 

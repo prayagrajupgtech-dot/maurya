@@ -90,7 +90,7 @@ export default function PersonDetailView({ data }: { data: VerificationData }) {
 
       <button
         onClick={() => {
-          window.location.hash = "";
+          window.location.hash = "#/plans";
           window.location.reload();
         }}
         className="mt-6 text-[10px] font-bold text-slate-400 hover:text-slate-600 uppercase tracking-widest transition-colors underline underline-offset-4"

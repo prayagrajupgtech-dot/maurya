@@ -110,8 +110,8 @@ function validatePersonData(data: PersonData): ValidationErrors {
 export default function App() {
   const [viewData, setViewData] = useState<VerificationData | null>(null);
   const [verificationState, setVerificationState] = useState<"idle" | "loading" | "not-found" | "error">("idle");
-  const [isPlansPage, setIsPlansPage] = useState(true);
-  const [isAdminRoute, setIsAdminRoute] = useState(false);
+  const [isPlansPage, setIsPlansPage] = useState(false);
+  const [isAdminRoute, setIsAdminRoute] = useState(true);
   const [adminSession, setAdminSession] = useState<"checking" | "authenticated" | "unauthenticated">("checking");
   const [formData, setFormData] = useState<PersonData>({ 
     name: "", 
@@ -142,7 +142,7 @@ export default function App() {
     const handleRoute = async () => {
       const currentRequest = ++requestNumber;
       const hash = window.location.hash;
-      if (hash === "#/admin") {
+      if (hash === "" || hash === "#/admin") {
         setIsPlansPage(false);
         setIsAdminRoute(true);
         setViewData(null);
@@ -159,7 +159,7 @@ export default function App() {
         } catch {
           if (currentRequest === requestNumber) setAdminSession("unauthenticated");
         }
-      } else if (hash === "#/plans" || hash === "") {
+      } else if (hash === "#/plans") {
         setIsPlansPage(true);
         setIsAdminRoute(false);
         setViewData(null);
@@ -261,7 +261,7 @@ export default function App() {
           {verificationState !== "loading" && (
             <button
               onClick={() => {
-                window.location.hash = "";
+                window.location.hash = "#/plans";
                 window.location.reload();
               }}
               className="mt-8 bg-amber-500 text-black font-black uppercase text-xs tracking-widest px-6 py-3 rounded-xl"
@@ -270,6 +270,14 @@ export default function App() {
             </button>
           )}
         </div>
+      </div>
+    );
+  }
+
+  if (!isAdminRoute || adminSession !== "authenticated") {
+    return (
+      <div className="min-h-screen bg-[#020617] text-white flex items-center justify-center p-6">
+        <p className="text-xs font-black uppercase tracking-[3px] text-white/40">Loading secure page...</p>
       </div>
     );
   }

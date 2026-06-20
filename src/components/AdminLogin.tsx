@@ -58,7 +58,7 @@ export default function AdminLogin({ onAuthenticated }: AdminLoginProps) {
         </button>
         <button
           type="button"
-          onClick={() => { window.location.hash = ""; }}
+          onClick={() => { window.location.hash = "#/plans"; }}
           className="mt-3 w-full py-3 text-xs font-black uppercase tracking-widest text-white/50 hover:text-white"
         >
           Return to plans
