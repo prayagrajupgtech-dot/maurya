@@ -21,7 +21,13 @@ export default function AdminLogin({ onAuthenticated }: AdminLoginProps) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ password })
       });
-      const result = await response.json();
+      const responseText = await response.text();
+      let result: { error?: string } = {};
+      try {
+        result = JSON.parse(responseText) as { error?: string };
+      } catch {
+        if (!response.ok) throw new Error("Admin service is temporarily unavailable.");
+      }
       if (!response.ok) throw new Error(result.error || "Could not sign in.");
       setPassword("");
       onAuthenticated();
