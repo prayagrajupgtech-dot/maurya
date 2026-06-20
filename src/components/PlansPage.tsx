@@ -45,7 +45,7 @@ export default function PlansPage() {
       const checkoutLoaded = await loadRazorpayCheckout();
       if (!checkoutLoaded || !window.Razorpay) throw new Error("Razorpay Checkout could not be loaded.");
 
-      const response = await fetch("/.netlify/functions/create-subscription", {
+      const response = await fetch("/api/create-subscription", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(customer)
@@ -56,7 +56,7 @@ export default function PlansPage() {
       const checkout = new window.Razorpay({
         description: "First 30 days free, then INR 99 per month",
         handler: async (payment: Record<string, string>) => {
-          const verifyResponse = await fetch("/.netlify/functions/verify-subscription", {
+          const verifyResponse = await fetch("/api/verify-subscription", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(payment)

@@ -1,6 +1,8 @@
 # QR and ID Card Generator
 
-React + Vite app for creating ID cards and database-backed QR verification links. Netlify Functions keep the Supabase secret key out of the browser bundle.
+React + Vite app for creating ID cards and database-backed QR verification links. Serverless functions keep the Supabase and Razorpay secrets out of the browser bundle.
+
+The same server handlers are exposed as Vercel Functions under `/api/*`, so the app can run on either Vercel or Netlify.
 
 ## Local Development
 
@@ -9,7 +11,7 @@ npm install
 npm run dev
 ```
 
-The Vite server only runs the frontend. Use Netlify Dev when testing card creation and verification Functions locally.
+The Vite server only runs the frontend. Use `vercel dev` for Vercel Functions or Netlify Dev for Netlify Functions when testing the complete workflow locally.
 
 ## Build
 
@@ -70,5 +72,11 @@ https://YOUR_SITE/.netlify/functions/razorpay-webhook
 ```
 
 Use the same webhook secret stored in `RAZORPAY_WEBHOOK_SECRET`. Subscribe to subscription lifecycle events, including authenticated, activated, charged, pending, halted, completed, and cancelled. Run the subscription tables in [supabase/schema.sql](supabase/schema.sql) before testing.
+
+On Vercel, configure the webhook URL as:
+
+```text
+https://YOUR_VERCEL_DOMAIN/api/razorpay-webhook
+```
 
 Do not enable live credentials until authentication, customer cancellation, support, privacy, refund, and production monitoring workflows are complete.

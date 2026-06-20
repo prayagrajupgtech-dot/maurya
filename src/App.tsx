@@ -149,7 +149,7 @@ export default function App() {
         setVerificationState("idle");
         setAdminSession("checking");
         try {
-          const response = await fetch("/.netlify/functions/admin-session", {
+          const response = await fetch("/api/admin-session", {
             headers: { Accept: "application/json" }
           });
           const result = await response.json();
@@ -172,7 +172,7 @@ export default function App() {
         setVerificationState("loading");
 
         try {
-          const response = await fetch(`/.netlify/functions/verify-card?id=${encodeURIComponent(recordId)}`, {
+          const response = await fetch(`/api/verify-card?id=${encodeURIComponent(recordId)}`, {
             headers: { Accept: "application/json" }
           });
           const result = await response.json();
@@ -300,7 +300,7 @@ export default function App() {
     };
 
     try {
-      const response = await fetch("/.netlify/functions/create-card", {
+      const response = await fetch("/api/create-card", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -355,7 +355,7 @@ export default function App() {
     setIsSavingRecord(true);
     setRecordMessage("");
     try {
-      const response = await fetch("/.netlify/functions/update-card", {
+      const response = await fetch("/api/update-card", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -467,7 +467,7 @@ export default function App() {
             </button>
             <button
               onClick={async () => {
-                await fetch("/.netlify/functions/admin-session", { method: "DELETE" });
+                await fetch("/api/admin-session", { method: "DELETE" });
                 setAdminSession("unauthenticated");
                 window.location.hash = "";
               }}
