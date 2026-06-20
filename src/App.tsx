@@ -49,6 +49,17 @@ function normalizePhone(phone: string): string {
   return digits.length === 12 && digits.startsWith("91") ? digits.slice(2) : digits;
 }
 
+function getPublicBaseUrl() {
+  const configuredUrl = import.meta.env.VITE_PUBLIC_SITE_URL?.trim().replace(/\/$/, "");
+  if (configuredUrl) return configuredUrl;
+
+  const url = new URL(window.location.href);
+  if (url.hostname.endsWith(".netlify.app") && url.hostname.includes("--")) {
+    url.hostname = url.hostname.split("--").pop() || url.hostname;
+  }
+  return url.origin + url.pathname;
+}
+
 function validatePersonData(data: PersonData): ValidationErrors {
   const errors: ValidationErrors = {};
   const name = data.name.trim();
@@ -276,13 +287,11 @@ export default function App() {
   };
 
   const getQrUrl = (data: GeneratedPersonData) => {
-    const baseUrl = window.location.origin + window.location.pathname;
-    return `${baseUrl}#/verify/${data.recordId}`;
+    return `${getPublicBaseUrl()}#/verify/${data.recordId}`;
   };
 
   const getSubscriptionUrl = () => {
-    const baseUrl = window.location.origin + window.location.pathname;
-    return `${baseUrl}#/plans`;
+    return `${getPublicBaseUrl()}#/plans`;
   };
 
   const updateGeneratedData = (field: keyof PersonData, value: string) => {
