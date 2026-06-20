@@ -4,6 +4,7 @@ interface PersonData {
   name: string;
   phone: string;
   photo: string;
+  signature: string;
   idNumber: string;
   dob: string;
   address: string;
@@ -54,7 +55,7 @@ const IDCard = forwardRef<HTMLDivElement, { data: PersonData }>(({ data }, ref) 
       </div>
 
       <div className="px-6 pt-5 pb-10 flex gap-6">
-        <div className="shrink-0 flex flex-col items-center gap-2">
+        <div className="shrink-0 flex flex-col items-center gap-1">
           <div
             className="w-[110px] h-[130px] rounded-md border-2 overflow-hidden"
             style={{
@@ -75,7 +76,16 @@ const IDCard = forwardRef<HTMLDivElement, { data: PersonData }>(({ data }, ref) 
               </div>
             )}
           </div>
-          <div className="w-[100px] h-[1px]" style={{ backgroundColor: "rgba(255,255,255,0.2)" }} />
+          <div
+            className="w-[100px] h-[18px] flex items-center justify-center rounded-sm px-1"
+            style={{ backgroundColor: "#ffffff" }}
+          >
+            {data.signature ? (
+              <img src={data.signature} alt="" className="w-full h-full object-contain" />
+            ) : (
+              <div className="w-full h-[1px]" style={{ backgroundColor: "#cbd5e1" }} />
+            )}
+          </div>
           <p className="text-[7px] tracking-widest uppercase" style={{ color: "rgba(255,255,255,0.3)" }}>
             Signature
           </p>

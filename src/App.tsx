@@ -8,6 +8,7 @@ interface PersonData {
   name: string;
   phone: string;
   photo: string;
+  signature: string;
   idNumber: string;
   dob: string;
   address: string;
@@ -99,6 +100,7 @@ export default function App() {
     name: "", 
     phone: "", 
     photo: "", 
+    signature: "",
     idNumber: "",
     dob: "",
     address: ""
@@ -348,6 +350,19 @@ export default function App() {
     });
   };
 
+  const loadImageFile = (field: "photo" | "signature", file?: File) => {
+    if (!file) return;
+    if (file.size > 5 * 1024 * 1024) {
+      setFormError("Image size must be 5 MB or less.");
+      return;
+    }
+
+    setFormError("");
+    const reader = new FileReader();
+    reader.onloadend = () => updateFormData(field, reader.result as string);
+    reader.readAsDataURL(file);
+  };
+
   const fieldClassName = (field: keyof ValidationErrors) =>
     `w-full bg-white/5 border rounded-2xl px-5 py-4 outline-none focus:border-amber-500/50 font-bold ${
       errors[field] ? "border-red-500/70" : "border-white/10"
@@ -436,29 +451,53 @@ export default function App() {
                 </div>
               </div>
 
-              <div className="p-8 border-2 border-dashed border-white/10 rounded-3xl flex flex-col sm:flex-row items-center gap-8 hover:bg-white/5 transition-all">
-                <div className="w-24 h-32 bg-white/5 rounded-2xl border border-white/10 overflow-hidden flex items-center justify-center shrink-0">
-                  {formData.photo ? <img src={formData.photo} className="w-full h-full object-cover" /> : <svg viewBox="0 0 24 24" className="w-10 h-10 text-white/10" fill="currentColor"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" /></svg>}
+              <div className="grid sm:grid-cols-2 gap-4">
+                <div className="p-6 border-2 border-dashed border-white/10 rounded-3xl flex flex-col items-center text-center gap-5 hover:bg-white/5 transition-all">
+                  <div className="w-24 h-32 bg-white/5 rounded-2xl border border-white/10 overflow-hidden flex items-center justify-center">
+                    {formData.photo ? (
+                      <img src={formData.photo} alt="Passport preview" className="w-full h-full object-cover" />
+                    ) : (
+                      <svg viewBox="0 0 24 24" className="w-10 h-10 text-white/10" fill="currentColor">
+                        <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" />
+                      </svg>
+                    )}
+                  </div>
+                  <div>
+                    <p className="font-black text-lg mb-1">Passport Photo</p>
+                    <p className="text-xs text-white/30 font-bold mb-4">Shown on the downloaded ID card.</p>
+                    <label className="cursor-pointer bg-white text-black text-[10px] font-black uppercase tracking-[3px] px-6 py-3 rounded-xl inline-block hover:scale-105 active:scale-95 transition-all">
+                      Select Photo
+                      <input
+                        type="file"
+                        accept="image/png,image/jpeg,image/webp"
+                        onChange={event => loadImageFile("photo", event.target.files?.[0])}
+                        className="hidden"
+                      />
+                    </label>
+                  </div>
                 </div>
-                <div className="text-center sm:text-left">
-                  <p className="font-black text-lg mb-1">Passport Photo</p>
-                  <p className="text-xs text-white/30 font-bold mb-4">This will show on ID card, but NOT on QR scan page.</p>
-                  <label className="cursor-pointer bg-white text-black text-[10px] font-black uppercase tracking-[3px] px-6 py-3 rounded-xl inline-block hover:scale-105 active:scale-95 transition-all">
-                    Select Image
-                    <input 
-                      type="file" 
-                      accept="image/*"
-                      onChange={e => {
-                        const file = e.target.files?.[0];
-                        if (file) {
-                          const reader = new FileReader();
-                          reader.onloadend = () => setFormData({...formData, photo: reader.result as string});
-                          reader.readAsDataURL(file);
-                        }
-                      }}
-                      className="hidden"
-                    />
-                  </label>
+
+                <div className="p-6 border-2 border-dashed border-white/10 rounded-3xl flex flex-col items-center text-center gap-5 hover:bg-white/5 transition-all">
+                  <div className="w-40 h-20 bg-white rounded-2xl border border-white/10 overflow-hidden flex items-center justify-center p-3">
+                    {formData.signature ? (
+                      <img src={formData.signature} alt="Signature preview" className="w-full h-full object-contain" />
+                    ) : (
+                      <div className="w-28 border-b-2 border-slate-300" />
+                    )}
+                  </div>
+                  <div>
+                    <p className="font-black text-lg mb-1">Signature</p>
+                    <p className="text-xs text-white/30 font-bold mb-4">Use a clear PNG, JPG, or WebP image.</p>
+                    <label className="cursor-pointer bg-white text-black text-[10px] font-black uppercase tracking-[3px] px-6 py-3 rounded-xl inline-block hover:scale-105 active:scale-95 transition-all">
+                      Select Signature
+                      <input
+                        type="file"
+                        accept="image/png,image/jpeg,image/webp"
+                        onChange={event => loadImageFile("signature", event.target.files?.[0])}
+                        className="hidden"
+                      />
+                    </label>
+                  </div>
                 </div>
               </div>
 
