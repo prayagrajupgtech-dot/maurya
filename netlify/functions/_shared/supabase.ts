@@ -1,11 +1,19 @@
 import { createClient } from "@supabase/supabase-js";
 
-export function getSupabaseAdmin() {
-  const url = process.env.SUPABASE_URL;
-  const secretKey = process.env.SUPABASE_SECRET_KEY;
+export function isSupabaseConfigured() {
+  const url = process.env.SUPABASE_URL?.trim();
+  const secretKey = process.env.SUPABASE_SECRET_KEY?.trim();
+  if (!url || !secretKey) return false;
+  if (url.includes("your-project.supabase.co") || secretKey.includes("your-server-only")) return false;
+  return true;
+}
 
-  if (!url || !secretKey) {
-    throw new Error("Supabase environment variables are not configured.");
+export function getSupabaseAdmin() {
+  const url = process.env.SUPABASE_URL?.trim();
+  const secretKey = process.env.SUPABASE_SECRET_KEY?.trim();
+
+  if (!url || !secretKey || !isSupabaseConfigured()) {
+    throw new Error("Supabase environment variables are not configured in .env.");
   }
 
   return createClient(url, secretKey, {

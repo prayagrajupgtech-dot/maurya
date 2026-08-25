@@ -2,17 +2,31 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 
 function getRequiredEnv(name: string) {
   const value = process.env[name]?.trim();
-  if (!value) throw new Error(`${name} is not configured.`);
+  if (!value) throw new Error(`${name} is not configured in .env.`);
   return value;
 }
 
 export function getRazorpayConfig() {
-  return {
-    keyId: getRequiredEnv("RAZORPAY_KEY_ID"),
-    keySecret: getRequiredEnv("RAZORPAY_KEY_SECRET"),
-    planId: getRequiredEnv("RAZORPAY_PLAN_ID"),
-    webhookSecret: getRequiredEnv("RAZORPAY_WEBHOOK_SECRET")
-  };
+  const keyId = getRequiredEnv("RAZORPAY_KEY_ID");
+  const keySecret = getRequiredEnv("RAZORPAY_KEY_SECRET");
+  const planId = getRequiredEnv("RAZORPAY_PLAN_ID");
+
+  if (keyId.includes("your_key_id")) {
+    throw new Error("RAZORPAY_KEY_ID in .env is using a placeholder. Replace it with your actual Razorpay Key ID (e.g. rzp_test_...).");
+  }
+  if (keySecret.includes("your-server-only-key-secret")) {
+    throw new Error("RAZORPAY_KEY_SECRET in .env is using a placeholder. Replace it with your actual Razorpay Key Secret.");
+  }
+  if (planId.includes("your_plan_id")) {
+    throw new Error("RAZORPAY_PLAN_ID in .env is using a placeholder. Create a Subscription Plan in Razorpay Dashboard and set its ID in .env.");
+  }
+  if (planId.startsWith("rzp_test_") || planId.startsWith("rzp_live_")) {
+    throw new Error(`RAZORPAY_PLAN_ID is set to "${planId}" which is a Razorpay Key ID, not a Plan ID. Plan IDs in Razorpay start with "plan_". Please create a Plan in Razorpay Dashboard (Subscriptions -> Plans) and set its ID in .env.`);
+  }
+
+  const webhookSecret = process.env.RAZORPAY_WEBHOOK_SECRET?.trim() || "";
+
+  return { keyId, keySecret, planId, webhookSecret };
 }
 
 export async function createRazorpaySubscription(body: Record<string, unknown>) {
@@ -28,7 +42,14 @@ export async function createRazorpaySubscription(body: Record<string, unknown>) 
   const result = await response.json();
   if (!response.ok) {
     console.error("Razorpay subscription API error", result);
-    throw new Error("Could not create the Razorpay subscription.");
+    const errorDetails = result?.error?.description || result?.error?.reason || result?.error?.code || response.statusText;
+    if (response.status === 401) {
+      throw new Error("Razorpay authentication failed (401). Please check RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET in .env.");
+    }
+    if (response.status === 400 && errorDetails?.toLowerCase().includes("plan")) {
+      throw new Error(`Invalid Razorpay Plan ID: ${errorDetails}`);
+    }
+    throw new Error(`Razorpay API Error (${response.status}): ${errorDetails || "Could not create subscription"}`);
   }
   return result as {
     id: string;

@@ -1,5 +1,5 @@
 import { jsonResponse, readJsonBody, sha256 } from "./_shared/http.js";
-import { getSupabaseAdmin } from "./_shared/supabase.js";
+import { getSupabaseAdmin, isSupabaseConfigured } from "./_shared/supabase.js";
 import { requireAdmin } from "./_shared/admin-auth.js";
 
 function validateCard(body: Record<string, unknown>) {
@@ -42,27 +42,34 @@ export default async (request: Request) => {
     const cardNumber = `ID-${crypto.randomUUID().replace(/-/g, "").slice(0, 8).toUpperCase()}`;
     const editToken = `${crypto.randomUUID()}${crypto.randomUUID()}`.replace(/-/g, "");
     const editTokenHash = await sha256(editToken);
-    const supabase = getSupabaseAdmin();
-    const { data, error } = await supabase
-      .from("id_cards")
-      .insert({
-        address: validated.address,
-        card_number: cardNumber,
-        date_of_birth: validated.dateOfBirth,
-        edit_token_hash: editTokenHash,
-        name: validated.name,
-        phone: validated.phone,
-        status: "active"
-      })
-      .select("id, card_number")
-      .single();
 
-    if (error) {
-      console.error("Supabase create-card error", error);
-      return jsonResponse({ error: "Could not create the verification record." }, 500);
+    if (isSupabaseConfigured()) {
+      const supabase = getSupabaseAdmin();
+      const { data, error } = await supabase
+        .from("id_cards")
+        .insert({
+          address: validated.address,
+          card_number: cardNumber,
+          date_of_birth: validated.dateOfBirth,
+          edit_token_hash: editTokenHash,
+          name: validated.name,
+          phone: validated.phone,
+          status: "active"
+        })
+        .select("id, card_number")
+        .single();
+
+      if (error) {
+        console.error("Supabase create-card error", error);
+        return jsonResponse({ error: "Could not create the verification record." }, 500);
+      }
+
+      return jsonResponse({ id: data.id, cardNumber: data.card_number, editToken }, 201);
     }
 
-    return jsonResponse({ id: data.id, cardNumber: data.card_number, editToken }, 201);
+    // Dev mode fallback when Supabase is not configured yet
+    const localId = crypto.randomUUID();
+    return jsonResponse({ id: localId, cardNumber, editToken }, 201);
   } catch (error) {
     if (error instanceof Error && error.message === "PAYLOAD_TOO_LARGE") {
       return jsonResponse({ error: "Request is too large." }, 413);

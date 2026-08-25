@@ -70,6 +70,11 @@ export default function PlansPage() {
           setMessage("Subscription authorization verified. Your 30-day free period has started.");
         },
         key: result.keyId,
+        modal: {
+          ondismiss: () => {
+            setMessage("Checkout was closed before completion.");
+          }
+        },
         name: "Maurya and Company",
         prefill: {
           contact: customer.phone,

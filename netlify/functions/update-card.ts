@@ -1,5 +1,5 @@
 import { isUuid, jsonResponse, readJsonBody, sha256 } from "./_shared/http.js";
-import { getSupabaseAdmin } from "./_shared/supabase.js";
+import { getSupabaseAdmin, isSupabaseConfigured } from "./_shared/supabase.js";
 
 export default async (request: Request) => {
   if (request.method !== "PATCH") {
@@ -17,6 +17,10 @@ export default async (request: Request) => {
     if (!/^[0-9a-f]{64}$/i.test(editToken)) return jsonResponse({ error: "Invalid edit authorization." }, 403);
     if (name.length < 3 || name.length > 100) return jsonResponse({ error: "Invalid name." }, 400);
     if (!/^[6-9]\d{9}$/.test(phone)) return jsonResponse({ error: "Invalid phone number." }, 400);
+
+    if (!isSupabaseConfigured()) {
+      return jsonResponse({ success: true, localOnly: true });
+    }
 
     const supabase = getSupabaseAdmin();
     const editTokenHash = await sha256(editToken);

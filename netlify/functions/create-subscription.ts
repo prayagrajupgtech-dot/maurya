@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { jsonResponse, readJsonBody } from "./_shared/http.js";
 import { createRazorpaySubscription, getRazorpayConfig } from "./_shared/razorpay.js";
-import { getSupabaseAdmin } from "./_shared/supabase.js";
+import { getSupabaseAdmin, isSupabaseConfigured } from "./_shared/supabase.js";
 
 function validateCustomer(body: Record<string, unknown>) {
   const name = typeof body.name === "string" ? body.name.trim() : "";
@@ -41,18 +41,23 @@ export default async (request: Request) => {
       total_count: 60
     });
 
-    const supabase = getSupabaseAdmin();
-    const { error } = await supabase.from("subscriptions").insert({
-      customer_email: customer.email,
-      customer_name: customer.name,
-      customer_phone: customer.phone,
-      razorpay_subscription_id: razorpaySubscription.id,
-      status: razorpaySubscription.status,
-      trial_ends_at: new Date(trialEndsAt * 1000).toISOString()
-    });
-    if (error) {
-      console.error("Supabase create-subscription error", error);
-      return jsonResponse({ error: "Subscription was created but could not be recorded. Contact support." }, 500);
+    if (isSupabaseConfigured()) {
+      try {
+        const supabase = getSupabaseAdmin();
+        const { error } = await supabase.from("subscriptions").insert({
+          customer_email: customer.email,
+          customer_name: customer.name,
+          customer_phone: customer.phone,
+          razorpay_subscription_id: razorpaySubscription.id,
+          status: razorpaySubscription.status,
+          trial_ends_at: new Date(trialEndsAt * 1000).toISOString()
+        });
+        if (error) {
+          console.error("Supabase create-subscription error", error);
+        }
+      } catch (dbErr) {
+        console.warn("Supabase record failed:", dbErr);
+      }
     }
 
     return jsonResponse({
@@ -62,6 +67,7 @@ export default async (request: Request) => {
     }, 201);
   } catch (error) {
     console.error("create-subscription failed", error);
-    return jsonResponse({ error: "Could not start the subscription checkout." }, 500);
+    const errorMessage = error instanceof Error ? error.message : "Could not start the subscription checkout.";
+    return jsonResponse({ error: errorMessage }, 500);
   }
 };
