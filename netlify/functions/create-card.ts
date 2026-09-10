@@ -1,6 +1,7 @@
 import { jsonResponse, readJsonBody, sha256 } from "./_shared/http.js";
 import { getSupabaseAdmin, isSupabaseConfigured } from "./_shared/supabase.js";
-import { requireAdmin } from "./_shared/admin-auth.js";
+import { isAdminRequest } from "./_shared/admin-auth.js";
+import { getUserById, getPlanById, getCardsByUserId, addCard } from "./_shared/store.js";
 
 function validateCard(body: Record<string, unknown>) {
   const name = typeof body.name === "string" ? body.name.trim() : "";
@@ -29,8 +30,12 @@ export default async (request: Request) => {
     return jsonResponse({ error: "Method not allowed." }, 405);
   }
 
-  const unauthorized = await requireAdmin(request);
-  if (unauthorized) return unauthorized;
+  const isAdmin = await isAdminRequest(request);
+
+  // Block normal users from creating cards - only admin can create cards
+  if (!isAdmin) {
+    return jsonResponse({ error: "Only administrators can create ID cards. Please contact the administrator." }, 403);
+  }
 
   try {
     const body = await readJsonBody(request);
@@ -38,6 +43,8 @@ export default async (request: Request) => {
     if ("error" in validated) {
       return jsonResponse({ error: validated.error }, 400);
     }
+
+    const userId = typeof body.userId === "string" ? body.userId : null;
 
     const cardNumber = `ID-${crypto.randomUUID().replace(/-/g, "").slice(0, 8).toUpperCase()}`;
     const editToken = `${crypto.randomUUID()}${crypto.randomUUID()}`.replace(/-/g, "");
@@ -54,6 +61,7 @@ export default async (request: Request) => {
           edit_token_hash: editTokenHash,
           name: validated.name,
           phone: validated.phone,
+          user_id: userId,
           status: "active"
         })
         .select("id, card_number")
@@ -67,9 +75,20 @@ export default async (request: Request) => {
       return jsonResponse({ id: data.id, cardNumber: data.card_number, editToken }, 201);
     }
 
-    // Dev mode fallback when Supabase is not configured yet
-    const localId = crypto.randomUUID();
-    return jsonResponse({ id: localId, cardNumber, editToken }, 201);
+    // Local store fallback
+    const newCard = await addCard({
+      id: crypto.randomUUID(),
+      card_number: cardNumber,
+      name: validated.name,
+      phone: validated.phone,
+      date_of_birth: validated.dateOfBirth,
+      address: validated.address,
+      user_id: userId,
+      status: "active",
+      created_at: new Date().toISOString()
+    });
+
+    return jsonResponse({ id: newCard.id, cardNumber, editToken }, 201);
   } catch (error) {
     if (error instanceof Error && error.message === "PAYLOAD_TOO_LARGE") {
       return jsonResponse({ error: "Request is too large." }, 413);

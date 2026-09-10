@@ -1,41 +1,40 @@
-import { useState, useRef, useEffect } from "react";
-import { QRCodeCanvas } from "qrcode.react";
-import html2canvas from "html2canvas";
-import IDCard from "./components/IDCard";
-import IDCardBack from "./components/IDCardBack";
-import PersonDetailView from "./components/PersonDetailView";
-import PlansPage from "./components/PlansPage";
+import { useState, useEffect } from "react";
+
+// Auth & Components
 import AdminLogin from "./components/AdminLogin";
 import UserLogin from "./components/UserLogin";
-import UserDashboard from "./components/UserDashboard";
+import LoginSelectionPage from "./components/auth/LoginSelectionPage";
+import PersonDetailView from "./components/PersonDetailView";
 import { useAuth } from "./contexts/AuthContext";
 
-interface PersonData {
-  name: string;
-  phone: string;
-  photo: string;
-  signature: string;
-  idNumber: string;
-  dob: string;
-  address: string;
-}
+// Admin Panel Components
+import AdminLayout from "./components/admin/AdminLayout";
+import AdminDashboard from "./components/admin/AdminDashboard";
+import AdminUsers from "./components/admin/AdminUsers";
+import AdminUserDetails from "./components/admin/AdminUserDetails";
+import AdminPlans from "./components/admin/AdminPlans";
+import AdminCreateCard from "./components/admin/AdminCreateCard";
+import AdminCardsList from "./components/admin/AdminCardsList";
+import AdminActivity from "./components/admin/AdminActivity";
+import AdminSettings from "./components/admin/AdminSettings";
 
-interface GeneratedPersonData extends PersonData {
-  editToken: string;
-  recordId: string;
-}
+// User Panel Components
+import UserNavigation from "./components/user/UserNavigation";
+import UserMyCardPage from "./components/user/UserMyCardPage";
+import UserProfilePage from "./components/user/UserProfilePage";
 
 interface VerificationData {
   databaseVerified: boolean;
   idNumber: string;
   name: string;
   phone: string;
+  photoUrl?: string;
+  dateOfBirth?: string;
+  address?: string;
+  planName?: string;
   status: "active" | "expired" | "blocked" | "legacy";
 }
 
-type ValidationErrors = Partial<Record<"name" | "phone" | "dob" | "address", string>>;
-
-// Decodes QR codes generated before database verification was introduced.
 function decodeData(encoded: string): any {
   try {
     let base64 = encoded.replace(/-/g, "+").replace(/_/g, "/");
@@ -48,160 +47,46 @@ function decodeData(encoded: string): any {
   }
 }
 
-function normalizePhone(phone: string): string {
-  const digits = phone.replace(/\D/g, "");
-  return digits.length === 12 && digits.startsWith("91") ? digits.slice(2) : digits;
-}
-
-function getPublicBaseUrl() {
-  const configuredUrl = import.meta.env.VITE_PUBLIC_SITE_URL?.trim().replace(/\/$/, "");
-  if (configuredUrl) return configuredUrl;
-
-  const url = new URL(window.location.href);
-  if (url.hostname.endsWith(".netlify.app") && url.hostname.includes("--")) {
-    url.hostname = url.hostname.split("--").pop() || url.hostname;
-  }
-  return url.origin + url.pathname;
-}
-
-function validatePersonData(data: PersonData): ValidationErrors {
-  const errors: ValidationErrors = {};
-  const name = data.name.trim();
-  const phone = normalizePhone(data.phone);
-  const address = data.address.trim();
-
-  if (!name) {
-    errors.name = "Name is required.";
-  } else if (name.length < 3) {
-    errors.name = "Name must be at least 3 characters.";
-  }
-
-  if (!phone) {
-    errors.phone = "Phone number is required.";
-  } else if (!/^[6-9]\d{9}$/.test(phone)) {
-    errors.phone = "Enter a valid 10-digit Indian mobile number.";
-  }
-
-  if (!data.dob) {
-    errors.dob = "Date of birth is required.";
-  } else {
-    const dob = new Date(`${data.dob}T00:00:00`);
-    const today = new Date();
-    const oldestAllowed = new Date();
-    oldestAllowed.setFullYear(today.getFullYear() - 120);
-
-    if (Number.isNaN(dob.getTime())) {
-      errors.dob = "Enter a valid date of birth.";
-    } else if (dob > today) {
-      errors.dob = "Date of birth cannot be in the future.";
-    } else if (dob < oldestAllowed) {
-      errors.dob = "Date of birth looks too old.";
-    }
-  }
-
-  if (!address) {
-    errors.address = "Home address is required.";
-  } else if (address.length < 10) {
-    errors.address = "Enter a complete home address.";
-  } else if (!/[a-zA-Z]/.test(address) || !/\d/.test(address)) {
-    errors.address = "Address should include house/street details and area.";
-  }
-
-  return errors;
-}
-
 export default function App() {
-  const { session: userSession, loading: authLoading } = useAuth();
+  const { session: userSession, user: currentUser, signOut } = useAuth();
+
+  // Routing State
+  const [currentHash, setCurrentHash] = useState(window.location.hash || "#/");
   const [viewData, setViewData] = useState<VerificationData | null>(null);
   const [verificationState, setVerificationState] = useState<"idle" | "loading" | "not-found" | "error">("idle");
-  const [isPlansPage, setIsPlansPage] = useState(false);
-  const [isAdminRoute, setIsAdminRoute] = useState(true);
-  const [isUserLogin, setIsUserLogin] = useState(false);
-  const [isUserDashboard, setIsUserDashboard] = useState(false);
+
+  // Admin Auth State
   const [adminSession, setAdminSession] = useState<"checking" | "authenticated" | "unauthenticated">("checking");
-  const [formData, setFormData] = useState<PersonData>({ 
-    name: "", 
-    phone: "", 
-    photo: "", 
-    signature: "",
-    idNumber: "",
-    dob: "",
-    address: ""
-  });
-  const [generatedData, setGeneratedData] = useState<GeneratedPersonData | null>(null);
-  const [activeTab, setActiveTab] = useState<"form" | "preview">("form");
-  const [errors, setErrors] = useState<ValidationErrors>({});
-  const [downloadingSide, setDownloadingSide] = useState<"front" | "back" | null>(null);
-  const [isCardFlipped, setIsCardFlipped] = useState(false);
-  const [isGenerating, setIsGenerating] = useState(false);
-  const [isSavingRecord, setIsSavingRecord] = useState(false);
-  const [formError, setFormError] = useState("");
-  const [recordMessage, setRecordMessage] = useState("");
+  const [selectedAdminUserId, setSelectedAdminUserId] = useState<string | null>(null);
 
-  const frontCardRef = useRef<HTMLDivElement>(null);
-  const backCardRef = useRef<HTMLDivElement>(null);
-  const qrRef = useRef<HTMLDivElement>(null);
+  // User Dashboard / Plan Data State
+  const [userData, setUserData] = useState<{
+    profile: { id: string; email: string; display_name?: string; status?: string } | null;
+    plan: { name: string; price: number; duration_days: number; card_limit: number } | null;
+    cards: Array<any>;
+  }>({ profile: null, plan: null, cards: [] });
 
+  const [userTab, setUserTab] = useState<"home" | "my-card" | "preview" | "profile">("home");
+  const [userBlockedMessage, setUserBlockedMessage] = useState("");
+
+  // Sync Hash & Route Guards
   useEffect(() => {
     let requestNumber = 0;
 
     const handleRoute = async () => {
       const currentRequest = ++requestNumber;
-      const hash = window.location.hash;
-      if (hash === "" || hash === "#/admin") {
-        setIsPlansPage(false);
-        setIsAdminRoute(true);
-        setIsUserLogin(false);
-        setIsUserDashboard(false);
-        setViewData(null);
-        setVerificationState("idle");
-        setAdminSession("checking");
-        try {
-          const response = await fetch("/api/admin-session", {
-            headers: { Accept: "application/json" }
-          });
-          const result = await response.json();
-          if (currentRequest === requestNumber) {
-            setAdminSession(response.ok && result.authenticated ? "authenticated" : "unauthenticated");
-          }
-        } catch {
-          if (currentRequest === requestNumber) setAdminSession("unauthenticated");
-        }
-      } else if (hash === "#/user/login") {
-        setIsPlansPage(false);
-        setIsAdminRoute(false);
-        setIsUserLogin(true);
-        setIsUserDashboard(false);
-        setViewData(null);
-        setVerificationState("idle");
-      } else if (hash === "#/user/dashboard") {
-        setIsPlansPage(false);
-        setIsAdminRoute(false);
-        setIsUserLogin(false);
-        setIsUserDashboard(true);
-        setViewData(null);
-        setVerificationState("idle");
-      } else if (hash === "#/plans") {
-        setIsPlansPage(true);
-        setIsAdminRoute(false);
-        setIsUserLogin(false);
-        setIsUserDashboard(false);
-        setViewData(null);
-        setVerificationState("idle");
-      } else if (hash.startsWith("#/verify/")) {
-        setIsPlansPage(false);
-        setIsAdminRoute(false);
-        const recordId = hash.split("#/verify/")[1];
+      const hash = window.location.hash || "#/";
+      setCurrentHash(hash);
+
+      // Check Verification routes - support both UUID and card_number
+      if (hash.startsWith("#/verify/")) {
+        const cardId = hash.split("#/verify/")[1];
         setViewData(null);
         setVerificationState("loading");
-
         try {
-          const response = await fetch(`/api/verify-card?id=${encodeURIComponent(recordId)}`, {
-            headers: { Accept: "application/json" }
-          });
+          const response = await fetch(`/api/verify-card?id=${encodeURIComponent(cardId)}`);
           const result = await response.json();
           if (currentRequest !== requestNumber) return;
-
           if (response.status === 404) {
             setVerificationState("not-found");
             return;
@@ -210,23 +95,25 @@ export default function App() {
             setVerificationState("error");
             return;
           }
-
           setViewData({
             databaseVerified: true,
             idNumber: result.cardNumber,
             name: result.name,
             phone: result.phone,
+            photoUrl: result.photoUrl,
+            dateOfBirth: result.dateOfBirth,
+            address: result.address,
+            planName: result.planName,
             status: result.status
           });
           setVerificationState("idle");
         } catch {
-          if (currentRequest === requestNumber) {
-            setVerificationState("error");
-          }
+          if (currentRequest === requestNumber) setVerificationState("error");
         }
-      } else if (hash.startsWith("#/v/")) {
-        setIsPlansPage(false);
-        setIsAdminRoute(false);
+        return;
+      }
+
+      if (hash.startsWith("#/v/")) {
         const encoded = hash.split("#/v/")[1];
         if (encoded) {
           const decoded = decodeData(encoded);
@@ -235,16 +122,25 @@ export default function App() {
             setVerificationState("idle");
           }
         }
-      } else {
-        setIsPlansPage(true);
-        setIsAdminRoute(false);
-        setIsUserLogin(false);
-        setIsUserDashboard(false);
-        setViewData(null);
-        setVerificationState("idle");
+        return;
+      }
+
+      // Check Admin route session
+      if (hash.startsWith("#/admin")) {
+        setAdminSession("checking");
+        try {
+          const response = await fetch("/api/admin-session");
+          const result = await response.json();
+          if (currentRequest === requestNumber) {
+            setAdminSession(response.ok && result.authenticated ? "authenticated" : "unauthenticated");
+          }
+        } catch {
+          if (currentRequest === requestNumber) setAdminSession("unauthenticated");
+        }
       }
     };
-    void handleRoute();
+
+    handleRoute();
     window.addEventListener("hashchange", handleRoute);
     return () => {
       requestNumber += 1;
@@ -252,40 +148,36 @@ export default function App() {
     };
   }, []);
 
-  if (isPlansPage) {
-    return <PlansPage />;
-  }
-
-  if (isUserLogin) {
-    return <UserLogin />;
-  }
-
-  if (isUserDashboard) {
-    if (authLoading) {
-      return (
-        <div className="min-h-screen bg-[#020617] text-white flex items-center justify-center p-6">
-          <p className="text-xs font-black uppercase tracking-[3px] text-white/40">Checking authentication...</p>
-        </div>
-      );
+  // Fetch User Dashboard Data (Profile, Assigned Plan, Cards)
+  useEffect(() => {
+    if (!currentUser) return;
+    async function loadUserDashboard() {
+      try {
+        const headers: Record<string, string> = {};
+        if (userSession?.access_token) {
+          headers["Authorization"] = `Bearer ${userSession.access_token}`;
+        }
+        const res = await fetch("/api/user-dashboard", { headers });
+        const data = await res.json();
+        if (res.status === 403) {
+          setUserBlockedMessage(data.error || "Your account has been blocked.");
+        } else if (res.ok) {
+          setUserData(data);
+          setUserBlockedMessage("");
+        }
+      } catch (e) {
+        console.error(e);
+      }
     }
-    if (!userSession) {
-      return <UserLogin />;
-    }
-    return <UserDashboard />;
-  }
+    loadUserDashboard();
+  }, [currentUser, userSession]);
 
-  if (isAdminRoute && adminSession === "checking") {
-    return (
-      <div className="min-h-screen bg-[#020617] text-white flex items-center justify-center p-6">
-        <p className="text-xs font-black uppercase tracking-[3px] text-white/40">Checking admin access...</p>
-      </div>
-    );
-  }
+  // Route Handlers
+  const isSelectionPage = currentHash === "#/" || currentHash === "" || currentHash === "#";
+  const isAdminRoute = currentHash.startsWith("#/admin");
+  const isUserLoginRoute = currentHash === "#/login" || currentHash === "#/user/login";
 
-  if (isAdminRoute && adminSession === "unauthenticated") {
-    return <AdminLogin onAuthenticated={() => setAdminSession("authenticated")} />;
-  }
-
+  // Public Verification View
   if (viewData) {
     return <PersonDetailView data={viewData} />;
   }
@@ -294,7 +186,7 @@ export default function App() {
     const messages = {
       error: ["Verification unavailable", "The verification service could not be reached. Please try again."],
       loading: ["Checking record", "Fetching the latest card status..."],
-      "not-found": ["Record not found", "This QR code does not match an existing verification record."]
+      "not-found": ["ID Card Not Found", "This QR code is invalid or the ID card does not exist."]
     };
     const [title, message] = messages[verificationState];
     return (
@@ -304,10 +196,7 @@ export default function App() {
           <p className="mt-3 text-sm text-white/50">{message}</p>
           {verificationState !== "loading" && (
             <button
-              onClick={() => {
-                window.location.hash = "#/plans";
-                window.location.reload();
-              }}
+              onClick={() => { window.location.hash = "#/"; window.location.reload(); }}
               className="mt-8 bg-amber-500 text-black font-black uppercase text-xs tracking-widest px-6 py-3 rounded-xl"
             >
               Return Home
@@ -318,476 +207,189 @@ export default function App() {
     );
   }
 
-  if (!isAdminRoute || adminSession !== "authenticated") {
+  // ----------------------------------------------------
+  // 1. FIRST PAGE: LOGIN SELECTION PAGE (/)
+  // ----------------------------------------------------
+  if (isSelectionPage) {
+    return (
+      <LoginSelectionPage
+        onSelectAdmin={() => { window.location.hash = "#/admin/login"; }}
+        onSelectUser={() => { window.location.hash = "#/login"; }}
+      />
+    );
+  }
+
+  // ----------------------------------------------------
+  // 2. ADMIN PANEL ROUTING (/admin/*)
+  // ----------------------------------------------------
+  if (isAdminRoute) {
+    if (currentHash === "#/admin/login") {
+      return <AdminLogin onAuthenticated={() => { setAdminSession("authenticated"); window.location.hash = "#/admin"; }} />;
+    }
+
+    if (adminSession === "checking") {
+      return (
+        <div className="min-h-screen bg-[#020617] text-white flex items-center justify-center p-6">
+          <p className="text-xs font-black uppercase tracking-[3px] text-white/40">Checking Admin Authorization...</p>
+        </div>
+      );
+    }
+
+    if (adminSession === "unauthenticated") {
+      return <AdminLogin onAuthenticated={() => { setAdminSession("authenticated"); window.location.hash = "#/admin"; }} />;
+    }
+
+    // Determine Active Admin Tab
+    let activeAdminTab = "dashboard";
+    if (currentHash === "#/admin/users") activeAdminTab = "users";
+    else if (currentHash.startsWith("#/admin/users/")) activeAdminTab = "user-details";
+    else if (currentHash === "#/admin/plans") activeAdminTab = "plans";
+    else if (currentHash === "#/admin/create-card") activeAdminTab = "create-card";
+    else if (currentHash === "#/admin/cards") activeAdminTab = "cards";
+    else if (currentHash === "#/admin/activity") activeAdminTab = "activity";
+    else if (currentHash === "#/admin/settings") activeAdminTab = "settings";
+
+    const handleAdminNavigate = (tab: string) => {
+      if (tab === "dashboard") window.location.hash = "#/admin";
+      else window.location.hash = `#/admin/${tab}`;
+    };
+
+    const handleAdminLogout = async () => {
+      await fetch("/api/admin-session", { method: "DELETE" });
+      setAdminSession("unauthenticated");
+      window.location.hash = "#/admin/login";
+    };
+
+    return (
+      <AdminLayout
+        currentTab={activeAdminTab}
+        title={activeAdminTab.toUpperCase().replace("-", " ")}
+        subtitle="Maurya System Administrator Control Center"
+        onNavigate={handleAdminNavigate}
+        onLogout={handleAdminLogout}
+      >
+        {activeAdminTab === "dashboard" && <AdminDashboard onNavigate={handleAdminNavigate} />}
+        {activeAdminTab === "users" && (
+          <AdminUsers
+            onSelectUser={id => {
+              setSelectedAdminUserId(id);
+              window.location.hash = `#/admin/users/${id}`;
+            }}
+          />
+        )}
+        {activeAdminTab === "user-details" && (
+          <AdminUserDetails
+            userId={selectedAdminUserId || currentHash.split("#/admin/users/")[1] || ""}
+            onBack={() => { window.location.hash = "#/admin/users"; }}
+          />
+        )}
+        {activeAdminTab === "plans" && <AdminPlans />}
+        {activeAdminTab === "create-card" && <AdminCreateCard />}
+        {activeAdminTab === "cards" && <AdminCardsList />}
+        {activeAdminTab === "activity" && <AdminActivity />}
+        {activeAdminTab === "settings" && <AdminSettings />}
+      </AdminLayout>
+    );
+  }
+
+  // ----------------------------------------------------
+  // 3. USER LOGIN PAGE (/login)
+  // ----------------------------------------------------
+  if (isUserLoginRoute) {
+    return <UserLogin />;
+  }
+
+  // Check if User is Blocked
+  if (userBlockedMessage) {
     return (
       <div className="min-h-screen bg-[#020617] text-white flex items-center justify-center p-6">
-        <p className="text-xs font-black uppercase tracking-[3px] text-white/40">Loading secure page...</p>
+        <div className="max-w-md text-center border border-red-500/20 bg-red-500/10 rounded-3xl p-10 space-y-4">
+          <span className="text-4xl">🚫</span>
+          <h1 className="text-2xl font-black uppercase text-red-400">Account Blocked</h1>
+          <p className="text-sm text-white/70">{userBlockedMessage}</p>
+          <button
+            onClick={async () => { await signOut(); window.location.hash = "#/login"; }}
+            className="mt-6 bg-white text-black font-black uppercase text-xs tracking-widest px-6 py-3 rounded-xl"
+          >
+            Log Out
+          </button>
+        </div>
       </div>
     );
   }
 
-  const handleGenerate = async () => {
-    const validationErrors = validatePersonData(formData);
-    setErrors(validationErrors);
-    setFormError("");
-
-    if (Object.keys(validationErrors).length > 0) {
-      return;
-    }
-
-    setIsGenerating(true);
-    const normalizedData = {
-      ...formData,
-      name: formData.name.trim(),
-      phone: normalizePhone(formData.phone),
-      address: formData.address.trim()
-    };
-
-    try {
-      const response = await fetch("/api/create-card", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          address: normalizedData.address,
-          dateOfBirth: normalizedData.dob,
-          name: normalizedData.name,
-          phone: normalizedData.phone
-        })
-      });
-      const result = await response.json();
-      if (!response.ok) {
-        throw new Error(result.error || "Could not create the verification record.");
-      }
-
-      setGeneratedData({
-        ...normalizedData,
-        editToken: result.editToken,
-        idNumber: result.cardNumber,
-        recordId: result.id
-      });
-      setRecordMessage("");
-      setActiveTab("preview");
-    } catch (error) {
-      setFormError(error instanceof Error ? error.message : "Could not create the verification record.");
-    } finally {
-      setIsGenerating(false);
-    }
-  };
-
-  const getQrUrl = (data: GeneratedPersonData) => {
-    return `${getPublicBaseUrl()}#/verify/${data.recordId}`;
-  };
-
-  const getSubscriptionUrl = () => {
-    return `${getPublicBaseUrl()}#/plans`;
-  };
-
-  const updateGeneratedData = (field: keyof PersonData, value: string) => {
-    setGeneratedData(prev => prev ? { ...prev, [field]: value } : prev);
-    setRecordMessage("");
-  };
-
-  const saveGeneratedDetails = async () => {
-    if (!generatedData || isSavingRecord) return;
-
-    const phone = normalizePhone(generatedData.phone);
-    if (generatedData.name.trim().length < 3 || !/^[6-9]\d{9}$/.test(phone)) {
-      setRecordMessage("Enter a valid name and 10-digit phone number.");
-      return;
-    }
-
-    setIsSavingRecord(true);
-    setRecordMessage("");
-    try {
-      const response = await fetch("/api/update-card", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          editToken: generatedData.editToken,
-          id: generatedData.recordId,
-          name: generatedData.name.trim(),
-          phone
-        })
-      });
-      const result = await response.json();
-      if (!response.ok) throw new Error(result.error || "Could not save changes.");
-      setGeneratedData(prev => prev ? { ...prev, name: prev.name.trim(), phone } : prev);
-      setRecordMessage("Scan details saved to the verification database.");
-    } catch (error) {
-      setRecordMessage(error instanceof Error ? error.message : "Could not save changes.");
-    } finally {
-      setIsSavingRecord(false);
-    }
-  };
-
-  const downloadIdCard = async (side: "front" | "back") => {
-    const cardElement = side === "front" ? frontCardRef.current : backCardRef.current;
-    if (!cardElement || !generatedData || downloadingSide) return;
-
-    setDownloadingSide(side);
-    try {
-      await document.fonts.ready;
-      await Promise.all(
-        Array.from(cardElement.querySelectorAll("img")).map(image =>
-          image.complete ? Promise.resolve() : image.decode()
-        )
-      );
-
-      const canvas = await html2canvas(cardElement, {
-        backgroundColor: null,
-        logging: false,
-        scale: 2,
-        useCORS: true
-      });
-      const blob = await new Promise<Blob>((resolve, reject) => {
-        canvas.toBlob(result => result ? resolve(result) : reject(new Error("Could not create ID card image.")), "image/png");
-      });
-      const objectUrl = URL.createObjectURL(blob);
-      const safeName = generatedData.name.trim().replace(/[^a-zA-Z0-9_-]+/g, "-") || "id";
-      const link = document.createElement("a");
-      link.download = `card-${safeName}-${side}.png`;
-      link.href = objectUrl;
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      window.setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
-    } catch (error) {
-      console.error("ID card download failed", error);
-      window.alert("ID card download failed. Please try again.");
-    } finally {
-      setDownloadingSide(null);
-    }
-  };
-
-  const updateFormData = (field: keyof PersonData, value: string) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
-    setErrors(prev => {
-      if (!prev[field as keyof ValidationErrors]) return prev;
-      const next = { ...prev };
-      delete next[field as keyof ValidationErrors];
-      return next;
-    });
-  };
-
-  const loadImageFile = (field: "photo" | "signature", file?: File) => {
-    if (!file) return;
-    if (file.size > 5 * 1024 * 1024) {
-      setFormError("Image size must be 5 MB or less.");
-      return;
-    }
-
-    setFormError("");
-    const reader = new FileReader();
-    reader.onloadend = () => updateFormData(field, reader.result as string);
-    reader.readAsDataURL(file);
-  };
-
-  const fieldClassName = (field: keyof ValidationErrors) =>
-    `w-full bg-white/5 border rounded-2xl px-5 py-4 outline-none focus:border-amber-500/50 font-bold ${
-      errors[field] ? "border-red-500/70" : "border-white/10"
-    }`;
+  // User Guard: if trying to access user pages unauthenticated, show UserLogin
+  if (!currentUser && (currentHash === "#/home" || currentHash === "#/my-card" || currentHash === "#/preview" || currentHash === "#/profile")) {
+    return <UserLogin />;
+  }
 
   return (
     <div className="min-h-screen bg-[#020617] text-white selection:bg-amber-500/30">
-      {/* App Header */}
-      <header className="border-b border-white/5 bg-black/20 backdrop-blur-md sticky top-0 z-50 p-4">
-        <div className="max-w-4xl mx-auto flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-amber-500 rounded-xl flex items-center justify-center font-black text-black shadow-lg shadow-amber-500/20">ID</div>
-            <span className="font-black text-lg tracking-tighter uppercase">Maurya Generator</span>
-          </div>
-          <div className="flex bg-white/5 p-1 rounded-xl border border-white/10">
-            <button 
-              onClick={() => setActiveTab("form")}
-              className={`px-6 py-2 rounded-lg text-xs font-black transition-all ${activeTab === "form" ? "bg-amber-500 text-black" : "text-white/40"}`}
-            >
-              FORM
-            </button>
-            <button 
-              onClick={() => setActiveTab("preview")}
-              className={`px-6 py-2 rounded-lg text-xs font-black transition-all ${activeTab === "preview" ? "bg-amber-500 text-black" : "text-white/40"}`}
-            >
-              PREVIEW
-            </button>
-            <button
-              onClick={async () => {
-                await fetch("/api/admin-session", { method: "DELETE" });
-                setAdminSession("unauthenticated");
-                window.location.hash = "";
-              }}
-              className="px-4 py-2 rounded-lg text-xs font-black text-white/40 hover:text-white transition-colors"
-            >
-              LOG OUT
-            </button>
-          </div>
-        </div>
-      </header>
+      <UserNavigation
+        activeTab={userTab}
+        onTabChange={tab => setUserTab(tab)}
+        onLogout={async () => {
+          await signOut();
+          window.location.hash = "#/";
+        }}
+      />
 
       <main className="max-w-4xl mx-auto p-6 sm:p-10">
-        {activeTab === "form" ? (
-          <div className="bg-white/5 border border-white/10 rounded-[2.5rem] p-8 sm:p-12">
-            <div className="mb-10">
-              <h2 className="text-3xl font-black tracking-tight mb-2 uppercase">Maurya and Company</h2>
-              <p className="text-amber-500 text-sm font-bold uppercase tracking-widest">समस्या निवारण</p>
-            </div>
+        {userTab === "home" && (
+          <div className="bg-white/5 border border-white/10 rounded-[2.5rem] p-10 text-center space-y-6">
+            <span className="text-xs font-black uppercase tracking-[4px] text-amber-500">Welcome, {userData.profile?.display_name || "User"}</span>
+            <h1 className="text-4xl font-black uppercase tracking-tight">Your Digital ID Card</h1>
 
-            <div className="space-y-6">
-              <div className="grid sm:grid-cols-2 gap-6">
-                <div className="space-y-2">
-                  <label className="text-[10px] font-black text-white/30 uppercase tracking-[3px]">Full Name</label>
-                  <input 
-                    value={formData.name}
-                    onChange={e => updateFormData("name", e.target.value)}
-                    className={fieldClassName("name")}
-                    placeholder="Enter name"
-                  />
-                  {errors.name && <p className="text-xs font-bold text-red-300">{errors.name}</p>}
-                </div>
-
-                <div className="space-y-2">
-                  <label className="text-[10px] font-black text-white/30 uppercase tracking-[3px]">Phone Number</label>
-                  <input 
-                    type="tel"
-                    value={formData.phone}
-                    onChange={e => updateFormData("phone", e.target.value)}
-                    className={fieldClassName("phone")}
-                    placeholder="10-digit mobile number"
-                  />
-                  {errors.phone && <p className="text-xs font-bold text-red-300">{errors.phone}</p>}
-                </div>
-
-                <div className="space-y-2">
-                  <label className="text-[10px] font-black text-white/30 uppercase tracking-[3px]">Date of Birth</label>
-                  <input 
-                    type="date"
-                    value={formData.dob}
-                    onChange={e => updateFormData("dob", e.target.value)}
-                    max={new Date().toISOString().split("T")[0]}
-                    className={`${fieldClassName("dob")} [color-scheme:dark]`}
-                  />
-                  {errors.dob && <p className="text-xs font-bold text-red-300">{errors.dob}</p>}
-                </div>
-
-                <div className="space-y-2">
-                  <label className="text-[10px] font-black text-white/30 uppercase tracking-[3px]">Address</label>
-                  <textarea
-                    value={formData.address}
-                    onChange={e => updateFormData("address", e.target.value)}
-                    className={`${fieldClassName("address")} min-h-28 resize-none`}
-                    placeholder="House no, street, city, state"
-                  />
-                  {errors.address && <p className="text-xs font-bold text-red-300">{errors.address}</p>}
-                </div>
-              </div>
-
-              <div className="grid sm:grid-cols-2 gap-4">
-                <div className="p-6 border-2 border-dashed border-white/10 rounded-3xl flex flex-col items-center text-center gap-5 hover:bg-white/5 transition-all">
-                  <div className="w-24 h-32 bg-white/5 rounded-2xl border border-white/10 overflow-hidden flex items-center justify-center">
-                    {formData.photo ? (
-                      <img src={formData.photo} alt="Passport preview" className="w-full h-full object-cover" />
-                    ) : (
-                      <svg viewBox="0 0 24 24" className="w-10 h-10 text-white/10" fill="currentColor">
-                        <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" />
-                      </svg>
-                    )}
+            <div className="pt-4 space-y-4">
+              {userData.cards.length > 0 ? (
+                <div className="space-y-4">
+                  <div className="bg-black/30 border border-white/10 px-6 py-4 rounded-2xl inline-block">
+                    <p className="text-[10px] font-black text-white/30 uppercase tracking-widest">Card Status</p>
+                    <span className="inline-block mt-1 px-3 py-1 bg-emerald-500/10 text-emerald-400 font-black rounded-lg uppercase text-sm">
+                      Active
+                    </span>
                   </div>
-                  <div>
-                    <p className="font-black text-lg mb-1">Passport Photo</p>
-                    <p className="text-xs text-white/30 font-bold mb-4">Shown on the downloaded ID card.</p>
-                    <label className="cursor-pointer bg-white text-black text-[10px] font-black uppercase tracking-[3px] px-6 py-3 rounded-xl inline-block hover:scale-105 active:scale-95 transition-all">
-                      Select Photo
-                      <input
-                        type="file"
-                        accept="image/png,image/jpeg,image/webp"
-                        onChange={event => loadImageFile("photo", event.target.files?.[0])}
-                        className="hidden"
-                      />
-                    </label>
+
+                  <div className="bg-black/30 border border-white/10 px-6 py-4 rounded-2xl inline-block">
+                    <p className="text-[10px] font-black text-amber-500 uppercase tracking-widest">Current Plan</p>
+                    <p className="font-black text-white text-lg mt-1">{userData.plan?.name || "Basic"}</p>
+                    <p className="text-xs text-white/40 font-semibold">
+                      {userData.plan?.card_limit === -1 ? "Unlimited" : `${userData.plan?.card_limit || 100} Cards Limit`}
+                    </p>
                   </div>
                 </div>
-
-                <div className="p-6 border-2 border-dashed border-white/10 rounded-3xl flex flex-col items-center text-center gap-5 hover:bg-white/5 transition-all">
-                  <div className="w-40 h-20 bg-white rounded-2xl border border-white/10 overflow-hidden flex items-center justify-center p-3">
-                    {formData.signature ? (
-                      <img src={formData.signature} alt="Signature preview" className="w-full h-full object-contain" />
-                    ) : (
-                      <div className="w-28 border-b-2 border-slate-300" />
-                    )}
-                  </div>
-                  <div>
-                    <p className="font-black text-lg mb-1">Signature</p>
-                    <p className="text-xs text-white/30 font-bold mb-4">Use a clear PNG, JPG, or WebP image.</p>
-                    <label className="cursor-pointer bg-white text-black text-[10px] font-black uppercase tracking-[3px] px-6 py-3 rounded-xl inline-block hover:scale-105 active:scale-95 transition-all">
-                      Select Signature
-                      <input
-                        type="file"
-                        accept="image/png,image/jpeg,image/webp"
-                        onChange={event => loadImageFile("signature", event.target.files?.[0])}
-                        className="hidden"
-                      />
-                    </label>
-                  </div>
-                </div>
-              </div>
-
-              <button 
-                onClick={handleGenerate}
-                disabled={isGenerating}
-                className="w-full bg-amber-500 text-black font-black py-5 rounded-[2rem] text-lg hover:bg-amber-400 hover:scale-[1.01] transition-all shadow-2xl shadow-amber-500/20 disabled:cursor-wait disabled:opacity-60"
-              >
-                {isGenerating ? "SAVING VERIFICATION RECORD..." : "GENERATE ID & QR"}
-              </button>
-              {formError && (
-                <p className="text-center text-sm font-bold text-red-300">{formError}</p>
-              )}
-            </div>
-          </div>
-        ) : (
-          <div className="space-y-10">
-            {generatedData ? (
-              <div className="grid lg:grid-cols-1 gap-10">
-                {/* Editable QR Record */}
-                <div className="bg-white/5 border border-white/10 rounded-[3rem] p-8 sm:p-10">
-                  <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4 mb-8">
-                    <div>
-                      <span className="text-[10px] font-black text-amber-500 uppercase tracking-[5px]">QR Scan Page</span>
-                      <h2 className="text-2xl font-black uppercase tracking-tight mt-2">Editable Display Details</h2>
-                    </div>
-                    <button
-                      onClick={() => window.open(getQrUrl(generatedData), "_blank", "noopener,noreferrer")}
-                      className="bg-amber-500 text-black font-black uppercase tracking-[3px] px-6 py-3 rounded-2xl hover:bg-amber-400 transition-all text-[10px]"
-                    >
-                      Open Scan Page
-                    </button>
-                  </div>
-
-                  <div className="grid sm:grid-cols-2 gap-6">
-                    <div className="space-y-2">
-                      <label className="text-[10px] font-black text-white/30 uppercase tracking-[3px]">Name shown after scan</label>
-                      <input
-                        value={generatedData.name}
-                        onChange={e => updateGeneratedData("name", e.target.value)}
-                        className="w-full bg-white/5 border border-white/10 rounded-2xl px-5 py-4 outline-none focus:border-amber-500/50 font-bold"
-                        placeholder="Enter name"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <label className="text-[10px] font-black text-white/30 uppercase tracking-[3px]">Number shown after scan</label>
-                      <input
-                        type="tel"
-                        value={generatedData.phone}
-                        onChange={e => updateGeneratedData("phone", e.target.value)}
-                        className="w-full bg-white/5 border border-white/10 rounded-2xl px-5 py-4 outline-none focus:border-amber-500/50 font-bold"
-                        placeholder="Enter number"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="mt-6 flex flex-col sm:flex-row sm:items-center gap-4">
-                    <button
-                      onClick={saveGeneratedDetails}
-                      disabled={isSavingRecord}
-                      className="bg-white text-black font-black uppercase tracking-[3px] px-6 py-3 rounded-2xl transition-all text-[10px] disabled:cursor-wait disabled:opacity-60"
-                    >
-                      {isSavingRecord ? "Saving..." : "Save Scan Details"}
-                    </button>
-                    {recordMessage && (
-                      <p className="text-xs font-bold text-white/60">{recordMessage}</p>
-                    )}
-                  </div>
-
-                  <div className="mt-6 bg-black/20 border border-white/10 rounded-2xl p-4">
-                    <p className="text-[9px] font-black text-white/30 uppercase tracking-[3px] mb-2">Scan URL</p>
-                    <p className="text-xs text-white/60 break-all font-mono">{getQrUrl(generatedData)}</p>
-                  </div>
-                </div>
-
-                {/* ID Card Display */}
-                <div className="bg-white/5 border border-white/10 rounded-[3rem] p-10 flex flex-col items-center">
-                  <div className="w-full flex items-center justify-between gap-4 mb-10">
-                    <span className="text-[10px] font-black text-white/20 uppercase tracking-[5px]">Digital ID Card</span>
-                    <button
-                      onClick={() => setIsCardFlipped(value => !value)}
-                      className="bg-amber-500 text-black text-[10px] font-black uppercase tracking-[2px] px-4 py-2 rounded-xl"
-                    >
-                      Flip Card
-                    </button>
-                  </div>
-
-                  <div className="w-[300px] h-[180px] sm:w-[500px] sm:h-[300px]">
-                    <div className="w-[500px] h-[300px] scale-[0.6] sm:scale-100 origin-top-left" style={{ perspective: "1200px" }}>
-                      <div
-                        className="relative w-full h-full transition-transform duration-700"
-                        style={{
-                          transform: isCardFlipped ? "rotateY(180deg)" : "rotateY(0deg)",
-                          transformStyle: "preserve-3d"
-                        }}
-                      >
-                        <div className="absolute inset-0" style={{ backfaceVisibility: "hidden" }}>
-                          <IDCard ref={frontCardRef} data={generatedData} />
-                        </div>
-                        <div
-                          className="absolute inset-0"
-                          style={{ backfaceVisibility: "hidden", transform: "rotateY(180deg)" }}
-                        >
-                          <IDCardBack
-                            ref={backCardRef}
-                            cardNumber={generatedData.idNumber}
-                            subscriptionUrl={getSubscriptionUrl()}
-                          />
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  <p className="mt-5 text-[10px] font-bold uppercase tracking-widest text-white/30">
-                    Showing {isCardFlipped ? "back" : "front"} side
+              ) : (
+                <div className="bg-black/30 border border-white/10 px-8 py-6 rounded-2xl max-w-md mx-auto">
+                  <p className="text-sm text-white/50">
+                    Your ID card has not been created yet. Please contact the administrator.
                   </p>
-                  <div className="mt-7 flex flex-col sm:flex-row gap-3">
-                    <button
-                      onClick={() => downloadIdCard("front")}
-                      disabled={downloadingSide !== null}
-                      className="bg-white text-black font-black uppercase tracking-[2px] px-6 py-3 rounded-2xl transition-all disabled:cursor-wait disabled:opacity-60 text-[10px]"
-                    >
-                      {downloadingSide === "front" ? "Preparing..." : "Download Front"}
-                    </button>
-                    <button
-                      onClick={() => downloadIdCard("back")}
-                      disabled={downloadingSide !== null}
-                      className="bg-white text-black font-black uppercase tracking-[2px] px-6 py-3 rounded-2xl transition-all disabled:cursor-wait disabled:opacity-60 text-[10px]"
-                    >
-                      {downloadingSide === "back" ? "Preparing..." : "Download Back"}
-                    </button>
-                  </div>
                 </div>
+              )}
 
-                {/* QR Section */}
-                <div className="bg-white/5 border border-white/10 rounded-[3rem] p-10 flex flex-col items-center">
-                  <span className="text-[10px] font-black text-white/20 uppercase tracking-[5px] mb-10">Verification QR</span>
-                  <div className="bg-white p-8 rounded-[3rem] shadow-2xl" ref={qrRef}>
-                    <QRCodeCanvas value={getQrUrl(generatedData)} size={240} level="L" marginSize={2} />
-                  </div>
-                  <p className="text-white/30 text-[10px] font-bold mt-6 tracking-widest uppercase italic">Scan opens a read-only page with this Name & Phone</p>
-                  <button 
-                    onClick={() => {
-                      const canvas = qrRef.current!.querySelector("canvas");
-                      const link = document.createElement("a");
-                      link.download = `qr-${generatedData.name}.png`;
-                      link.href = canvas!.toDataURL();
-                      link.click();
-                    }}
-                    className="mt-8 bg-white text-black font-black uppercase tracking-[3px] px-10 py-4 rounded-2xl hover:scale-105 transition-all shadow-2xl"
-                  >
-                    Download QR Code
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <div className="text-center py-32 opacity-10">
-                <p className="font-black text-6xl tracking-tighter italic uppercase">No Card Ready</p>
-              </div>
-            )}
+              <button
+                onClick={() => setUserTab("my-card")}
+                className="bg-amber-500 text-black px-8 py-4 rounded-2xl font-black uppercase text-xs tracking-widest hover:bg-amber-400 transition-all shadow-xl shadow-amber-500/20"
+              >
+                {userData.cards.length > 0 ? "View My Card" : "Check Card Status"}
+              </button>
+            </div>
           </div>
+        )}
+
+        {userTab === "my-card" && <UserMyCardPage />}
+
+        {userTab === "preview" && (
+          <div className="text-center py-24 opacity-20 font-black text-4xl uppercase">
+            Select My Card to view your ID card
+          </div>
+        )}
+
+        {userTab === "profile" && (
+          <UserProfilePage
+            user={userData.profile}
+            assignedPlan={userData.plan}
+            cardsCount={userData.cards.length}
+          />
         )}
       </main>
     </div>

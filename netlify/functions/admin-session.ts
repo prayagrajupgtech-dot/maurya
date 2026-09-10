@@ -15,9 +15,23 @@ export default async (request: Request) => {
     if (request.method === "POST") {
       const body = await readJsonBody(request, 1_000);
       const password = typeof body.password === "string" ? body.password : "";
-      if (!(await verifyAdminPassword(password))) {
+
+      if (!password) {
+        return jsonResponse({ error: "Password is required." }, 400);
+      }
+
+      let passwordValid = false;
+      try {
+        passwordValid = await verifyAdminPassword(password);
+      } catch (envError) {
+        console.error("Admin auth config error:", envError);
+        return jsonResponse({ error: "Admin authentication is not configured on the server." }, 500);
+      }
+
+      if (!passwordValid) {
         return jsonResponse({ error: "Invalid admin password." }, 401);
       }
+
       const response = jsonResponse({ authenticated: true });
       response.headers.set("Set-Cookie", await createAdminSessionCookie(request));
       return response;
@@ -35,6 +49,6 @@ export default async (request: Request) => {
       return jsonResponse({ error: "Invalid request." }, 400);
     }
     console.error("admin-session failed", error);
-    return jsonResponse({ error: "Admin authentication is not configured." }, 500);
+    return jsonResponse({ error: "Admin authentication service encountered an error." }, 500);
   }
 };

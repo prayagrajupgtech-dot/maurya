@@ -1,6 +1,7 @@
 import { jsonResponse } from "./_shared/http.js";
 import { getSupabaseAdmin, isSupabaseConfigured } from "./_shared/supabase.js";
 import { verifyUserSession } from "./user-session.js";
+import { getUserById, getUserByEmail, getPlanById, getCardsByUserId } from "./_shared/store.js";
 
 export default async (request: Request) => {
   if (request.method !== "GET") return jsonResponse({ error: "Method not allowed." }, 405);
@@ -10,44 +11,66 @@ export default async (request: Request) => {
     return jsonResponse({ error: "Authentication required." }, 401);
   }
 
-  if (!isSupabaseConfigured()) {
-    return jsonResponse({ error: "Service not configured." }, 500);
-  }
-
   try {
-    const supabase = getSupabaseAdmin();
-
-    // Fetch user profile - match by auth user ID
-    const { data: profile, error: profileError } = await supabase
-      .from("user_profiles")
-      .select("id, email, display_name")
-      .eq("id", authUser.userId)
-      .single();
-
-    if (profileError || !profile) {
-      return jsonResponse({ error: "No registered account found. Please use the registration/subscription process first." }, 404);
+    let userRecord = await getUserById(authUser.userId);
+    if (!userRecord && authUser.email) {
+      userRecord = await getUserByEmail(authUser.email);
     }
 
-    // Fetch cards belonging to this user - server determines ownership via auth user ID
-    const { data: cards } = await supabase
-      .from("id_cards")
-      .select("id, card_number, name, phone, status, created_at")
-      .eq("user_id", authUser.userId)
-      .order("created_at", { ascending: false });
+    if (userRecord?.status === "blocked") {
+      return jsonResponse({ error: "Your account has been blocked by the administrator." }, 403);
+    }
 
-    // Fetch subscription belonging to this user
-    const { data: subscription } = await supabase
-      .from("subscriptions")
-      .select("razorpay_subscription_id, customer_name, customer_email, customer_phone, status, trial_ends_at, current_start_at, current_end_at, paid_count, remaining_count, created_at")
-      .eq("user_id", authUser.userId)
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .single();
+    let planRecord = userRecord?.plan_id ? await getPlanById(userRecord.plan_id) : null;
+    if (!planRecord) {
+      // Default basic plan fallback
+      const defaultPlans = await import("./_shared/store.js").then(m => m.getAllPlans());
+      planRecord = defaultPlans[0] || null;
+    }
+
+    if (isSupabaseConfigured()) {
+      const supabase = getSupabaseAdmin();
+      const { data: profile } = await supabase
+        .from("user_profiles")
+        .select("id, email, display_name, phone, status, plan_id")
+        .eq("id", authUser.userId)
+        .single();
+
+      if (profile?.status === "blocked") {
+        return jsonResponse({ error: "Your account has been blocked by the administrator." }, 403);
+      }
+
+      const { data: cards } = await supabase
+        .from("id_cards")
+        .select("id, card_number, name, phone, status, created_at")
+        .eq("user_id", authUser.userId)
+        .order("created_at", { ascending: false });
+
+      return jsonResponse({
+        profile: {
+          id: profile?.id || authUser.userId,
+          email: profile?.email || authUser.email || "",
+          display_name: profile?.display_name || authUser.email?.split("@")[0] || "User",
+          status: profile?.status || userRecord?.status || "active",
+          role: "user"
+        },
+        plan: planRecord,
+        cards: cards || []
+      });
+    }
+
+    const cards = await getCardsByUserId(userRecord?.id || authUser.userId);
 
     return jsonResponse({
-      profile,
-      cards: cards || [],
-      subscription: subscription || null
+      profile: {
+        id: userRecord?.id || authUser.userId,
+        email: userRecord?.email || authUser.email || "user@example.com",
+        display_name: userRecord?.display_name || "User",
+        status: userRecord?.status || "active",
+        role: "user"
+      },
+      plan: planRecord,
+      cards
     });
   } catch (error) {
     console.error("user-dashboard error:", error);

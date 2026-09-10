@@ -3,6 +3,10 @@ interface VerificationData {
   idNumber: string;
   name: string;
   phone: string;
+  photoUrl?: string;
+  dateOfBirth?: string;
+  address?: string;
+  planName?: string;
   status: "active" | "expired" | "blocked" | "legacy";
 }
 
@@ -14,89 +18,137 @@ export default function PersonDetailView({ data }: { data: VerificationData }) {
     month: "long",
     year: "numeric"
   });
+
   const isActive = data.databaseVerified && data.status === "active";
-  const statusText = isActive
-    ? "Active Database Record"
-    : data.status === "blocked"
-      ? "Blocked Record"
-      : data.status === "expired"
-        ? "Expired Record"
-        : "Legacy QR - Not Database Verified";
-  const statusColor = isActive
+  const isBlocked = data.status === "blocked";
+  const isExpired = data.status === "expired";
+
+  const statusLabel = isActive
+    ? "VERIFIED ID CARD"
+    : isBlocked
+      ? "CARD INACTIVE"
+      : isExpired
+        ? "CARD EXPIRED"
+        : "LEGACY QR";
+
+  const statusDescription = isActive
+    ? "This card is verified and active in the issuer database."
+    : isBlocked
+      ? "This ID card is currently inactive."
+      : isExpired
+        ? "This ID card has expired."
+        : "Legacy QR - Not database verified.";
+
+  const headerBg = isActive
     ? "bg-emerald-500"
-    : data.status === "legacy"
-      ? "bg-amber-500"
-      : "bg-red-500";
+    : isBlocked
+      ? "bg-red-500"
+      : "bg-amber-500";
 
   return (
-    <div className="min-h-screen bg-[#f8fafc] flex flex-col items-center p-4 sm:p-8 font-sans text-slate-900">
-      <div className="w-full max-w-lg bg-white shadow-[0_20px_50px_rgba(0,0,0,0.1)] rounded-3xl overflow-hidden border border-slate-200 relative">
-        <div className="absolute inset-0 flex items-center justify-center opacity-[0.03] pointer-events-none select-none">
-          <p className="text-6xl font-black rotate-45 uppercase">Maurya Verification</p>
-        </div>
-
-        <div className="bg-[#1e293b] text-white p-8 text-center relative">
-          <div className="w-16 h-16 bg-amber-500 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg shadow-amber-500/20">
-            <span className="text-2xl font-black text-black">M</span>
+    <div className="min-h-screen bg-[#0a0a0a] flex flex-col items-center p-4 sm:p-8 font-sans">
+      <div className="w-full max-w-md">
+        {/* Header */}
+        <div className="text-center mb-6">
+          <div className="w-14 h-14 bg-amber-500 rounded-2xl flex items-center justify-center mx-auto mb-3 shadow-lg shadow-amber-500/20">
+            <span className="text-xl font-black text-black">M</span>
           </div>
-          <h1 className="text-2xl font-black tracking-tight uppercase leading-none">Maurya and Company</h1>
-          <p className="text-amber-500 font-bold text-sm mt-1 tracking-[2px]">समस्या निवारण</p>
+          <h1 className="text-lg font-black tracking-tight uppercase text-white">Maurya Generator</h1>
+          <p className="text-amber-500 font-bold text-[10px] mt-0.5 tracking-[3px]">DIGITAL VERIFICATION</p>
         </div>
 
-        <div className={`${statusColor} py-2 px-4 flex items-center justify-center gap-2`}>
-          <span className="w-2 h-2 rounded-full bg-white" />
-          <span className="text-[10px] font-black text-white uppercase tracking-[2px]">{statusText}</span>
+        {/* Status Bar */}
+        <div className={`${headerBg} py-2.5 px-4 flex items-center justify-center gap-2 mb-6 rounded-xl`}>
+          <svg viewBox="0 0 24 24" className="w-4 h-4 text-white" fill="currentColor">
+            {isActive ? (
+              <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z" />
+            ) : (
+              <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z" />
+            )}
+          </svg>
+          <span className="text-[10px] font-black text-white uppercase tracking-[3px]">{statusLabel}</span>
         </div>
 
-        <div className="p-8 sm:p-12 space-y-10 relative">
-          <div className="space-y-8">
-            <div className="border-l-4 border-slate-200 pl-6">
-              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-[3px] mb-2">Full Name / नाम</p>
-              <p className="text-3xl font-black text-slate-800 uppercase tracking-tight break-words">
-                {data.name || "UNAVAILABLE"}
-              </p>
+        {/* Card */}
+        <div className="bg-[#141414] border border-white/10 rounded-3xl overflow-hidden">
+          {/* Photo Section */}
+          <div className="p-8 flex flex-col items-center border-b border-white/5">
+            <div className="w-28 h-28 rounded-full overflow-hidden border-4 border-white/10 mb-4 bg-white/5 flex items-center justify-center">
+              {data.photoUrl ? (
+                <img src={data.photoUrl} alt={data.name} className="w-full h-full object-cover" />
+              ) : (
+                <svg viewBox="0 0 24 24" className="w-14 h-14 text-white/10" fill="currentColor">
+                  <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" />
+                </svg>
+              )}
+            </div>
+            <p className="text-[10px] font-bold text-white/30 uppercase tracking-widest">Full Name</p>
+            <p className="text-2xl font-black text-white uppercase tracking-tight mt-1 text-center">
+              {data.name || "UNAVAILABLE"}
+            </p>
+          </div>
+
+          {/* Details Section */}
+          <div className="p-6 space-y-5">
+            {/* Mobile Number - PROMINENT */}
+            <div className="bg-white/5 rounded-2xl p-4">
+              <p className="text-[10px] font-bold text-white/30 uppercase tracking-widest mb-1">Mobile Number</p>
+              <p className="text-xl font-black text-amber-400 tracking-widest">{data.phone || "UNAVAILABLE"}</p>
             </div>
 
-            <div className="border-l-4 border-slate-200 pl-6">
-              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-[3px] mb-2">Phone Number / नंबर</p>
-              <p className="text-2xl font-bold text-slate-700 tracking-widest break-all">
-                {data.phone || "UNAVAILABLE"}
-              </p>
+            {/* Plan */}
+            {data.planName && (
+              <div className="bg-white/5 rounded-2xl p-4">
+                <p className="text-[10px] font-bold text-white/30 uppercase tracking-widest mb-1">Plan</p>
+                <p className="text-sm font-black text-white uppercase">{data.planName}</p>
+              </div>
+            )}
+
+            {data.dateOfBirth && (
+              <div className="bg-white/5 rounded-2xl p-4">
+                <p className="text-[10px] font-bold text-white/30 uppercase tracking-widest mb-1">Date of Birth</p>
+                <p className="text-sm font-bold text-white">{data.dateOfBirth}</p>
+              </div>
+            )}
+
+            {data.address && (
+              <div className="bg-white/5 rounded-2xl p-4">
+                <p className="text-[10px] font-bold text-white/30 uppercase tracking-widest mb-1">Address</p>
+                <p className="text-sm font-bold text-white">{data.address}</p>
+              </div>
+            )}
+
+            {/* Card Info Grid */}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="bg-white/5 rounded-2xl p-4">
+                <p className="text-[10px] font-bold text-white/30 uppercase tracking-widest mb-1">Card ID</p>
+                <p className="text-xs font-mono font-bold text-amber-400 break-all">{data.idNumber}</p>
+              </div>
+              <div className="bg-white/5 rounded-2xl p-4">
+                <p className="text-[10px] font-bold text-white/30 uppercase tracking-widest mb-1">Status</p>
+                <span className={`inline-block px-2.5 py-1 rounded-lg font-black text-[10px] uppercase ${
+                  isActive ? "bg-emerald-500/10 text-emerald-400" : "bg-red-500/10 text-red-400"
+                }`}>
+                  {isActive ? "ACTIVE" : isBlocked ? "INACTIVE" : "EXPIRED"}
+                </span>
+              </div>
             </div>
           </div>
 
-          <div className="pt-10 border-t border-slate-100 grid grid-cols-2 gap-4">
-            <div>
-              <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-1">Card Number</p>
-              <p className="text-[11px] font-mono font-bold text-slate-600 uppercase break-all">{data.idNumber}</p>
-            </div>
-            <div className="text-right">
-              <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-1">Checked At</p>
-              <p className="text-[11px] font-bold text-slate-600">{scanDate}</p>
-            </div>
+          {/* Footer */}
+          <div className="border-t border-white/5 p-4 text-center">
+            <p className="text-[10px] text-white/20 uppercase tracking-widest">{statusDescription}</p>
+            <p className="text-[9px] text-white/10 mt-2 uppercase tracking-wider">Checked at {scanDate}</p>
           </div>
         </div>
 
-        <div className="bg-slate-50 border-t border-slate-100 p-4 text-center">
-          <p className="text-[9px] text-slate-400 font-bold uppercase tracking-[2px]">
-            {data.databaseVerified ? "Live database verification" : "Legacy encoded QR record"}
+        {/* Branding */}
+        <div className="text-center mt-6">
+          <p className="text-[10px] text-white/20 font-bold uppercase tracking-widest">
+            Verified through Maurya Generator
           </p>
         </div>
       </div>
-
-      <p className="mt-8 text-[10px] text-slate-400 text-center max-w-xs leading-relaxed">
-        Verification confirms whether this card record currently exists and is active in the issuer database.
-      </p>
-
-      <button
-        onClick={() => {
-          window.location.hash = "#/plans";
-          window.location.reload();
-        }}
-        className="mt-6 text-[10px] font-bold text-slate-400 hover:text-slate-600 uppercase tracking-widest transition-colors underline underline-offset-4"
-      >
-        Close Record
-      </button>
     </div>
   );
 }
