@@ -29,7 +29,11 @@ export default function UserLogin() {
     setError("");
     setInfoMessage("");
     try {
-      await signInWithEmail(email, emailPassword);
+      const result = await signInWithEmail(email, emailPassword);
+      if (result?.requiresPasswordSetup) {
+        window.location.hash = `#/setup-password/${result.userId}/${encodeURIComponent(result.email)}`;
+        return;
+      }
       window.location.hash = "#/home";
     } catch (err) {
       setError(err instanceof Error ? err.message : "Email login failed.");

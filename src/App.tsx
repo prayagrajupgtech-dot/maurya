@@ -5,6 +5,7 @@ import AdminLogin from "./components/AdminLogin";
 import UserLogin from "./components/UserLogin";
 import LoginSelectionPage from "./components/auth/LoginSelectionPage";
 import PersonDetailView from "./components/PersonDetailView";
+import SetupPasswordPage from "./components/SetupPasswordPage";
 import { useAuth } from "./contexts/AuthContext";
 
 // Admin Panel Components
@@ -176,6 +177,7 @@ export default function App() {
   const isSelectionPage = currentHash === "#/" || currentHash === "" || currentHash === "#";
   const isAdminRoute = currentHash.startsWith("#/admin");
   const isUserLoginRoute = currentHash === "#/login" || currentHash === "#/user/login";
+  const isSetupPasswordRoute = currentHash.startsWith("#/setup-password/");
 
   // Public Verification View
   if (viewData) {
@@ -205,6 +207,18 @@ export default function App() {
         </div>
       </div>
     );
+  }
+
+  // ----------------------------------------------------
+  // SETUP PASSWORD PAGE (/setup-password/:userId/:email)
+  // ----------------------------------------------------
+  if (isSetupPasswordRoute) {
+    const parts = currentHash.split("/setup-password/");
+    const rest = parts[1] || "";
+    const lastSlash = rest.lastIndexOf("/");
+    const userId = lastSlash > -1 ? rest.substring(0, lastSlash) : rest;
+    const email = lastSlash > -1 ? decodeURIComponent(rest.substring(lastSlash + 1)) : "";
+    return <SetupPasswordPage userId={userId} email={email} />;
   }
 
   // ----------------------------------------------------

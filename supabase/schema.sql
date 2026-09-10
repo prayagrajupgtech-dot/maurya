@@ -31,6 +31,7 @@ create table if not exists public.user_profiles (
   display_name text,
   phone text,
   password_hash text,
+  password_configured boolean not null default true,
   role text not null default 'user' check (role in ('admin', 'user')),
   status text not null default 'active' check (status in ('active', 'blocked', 'deleted')),
   plan_id uuid references public.plans(id) on delete set null,

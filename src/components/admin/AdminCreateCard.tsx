@@ -23,6 +23,7 @@ export default function AdminCreateCard() {
   // Form State
   const [selectedUserId, setSelectedUserId] = useState("");
   const [selectedPlanId, setSelectedPlanId] = useState("");
+  const [email, setEmail] = useState("");
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [dob, setDob] = useState("");
@@ -79,6 +80,7 @@ export default function AdminCreateCard() {
     setSelectedUserId(userId);
     const u = users.find(x => x.id === userId);
     if (u) {
+      setEmail(u.email);
       setName(u.name);
       setPhone(u.phone || "");
       if (u.planId) setSelectedPlanId(u.planId);
@@ -100,8 +102,8 @@ export default function AdminCreateCard() {
     setError("");
     setSuccessMessage("");
 
-    if (!name || !phone || !dob || !address) {
-      setError("Please fill all required ID card details.");
+    if (!email || !name || !phone || !dob || !address) {
+      setError("Email and all card details are required.");
       return;
     }
 
@@ -112,7 +114,7 @@ export default function AdminCreateCard() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          userId: selectedUserId || null,
+          email,
           planId: selectedPlanId || null,
           name,
           phone,
@@ -135,7 +137,7 @@ export default function AdminCreateCard() {
           signature,
           planName
         });
-        setSuccessMessage(`Card ${data.cardNumber} created successfully.`);
+        setSuccessMessage(`Card ${data.cardNumber} created successfully. ${data.isNewAccount ? "New user account created." : "Card linked to existing account."}`);
         setQrGenerated(false);
         setQrCopied(false);
       } else {
@@ -218,6 +220,7 @@ export default function AdminCreateCard() {
     setQrCopied(false);
     setSuccessMessage("");
     setError("");
+    setEmail("");
     setName("");
     setPhone("");
     setDob("");
@@ -266,18 +269,18 @@ export default function AdminCreateCard() {
 
       {/* Form Steps */}
       <form onSubmit={handleGenerate} className="bg-white/5 border border-white/10 rounded-[2.5rem] p-8 space-y-6">
-        {/* Step 1: User Selection */}
+        {/* Step 1: User Selection & Email */}
         <div className="border-b border-white/10 pb-6 space-y-4">
           <span className="text-[10px] font-black text-amber-500 uppercase tracking-[4px]">Step 1 & 2: Select User & Plan</span>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label className="text-[10px] font-black text-white/30 uppercase tracking-widest block mb-2">Select User</label>
+              <label className="text-[10px] font-black text-white/30 uppercase tracking-widest block mb-2">Select User (Optional)</label>
               <select
                 value={selectedUserId}
                 onChange={e => handleSelectUserChange(e.target.value)}
                 className="w-full bg-slate-900 border border-white/10 rounded-xl px-4 py-3 text-xs font-bold outline-none focus:border-amber-500/50 text-white"
               >
-                <option value="">-- Direct Creation (No Account Link) --</option>
+                <option value="">-- Direct Creation (Enter Email Below) --</option>
                 {users.map(u => (
                   <option key={u.id} value={u.id}>{u.name} ({u.email}) - {u.planName}</option>
                 ))}
@@ -297,6 +300,19 @@ export default function AdminCreateCard() {
                 ))}
               </select>
             </div>
+          </div>
+
+          <div>
+            <label className="text-[10px] font-black text-amber-500 uppercase tracking-widest block mb-2">User Email Address *</label>
+            <input
+              required
+              type="email"
+              value={email}
+              onChange={e => setEmail(e.target.value)}
+              placeholder="user@example.com (account will be created if new)"
+              className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-xs font-bold outline-none focus:border-amber-500/50"
+            />
+            <p className="text-[10px] text-white/30 mt-1">First-time users will set their own password on first login.</p>
           </div>
         </div>
 

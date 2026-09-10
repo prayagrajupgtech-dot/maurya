@@ -71,6 +71,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || "Email sign in failed.");
+    if (data.requiresPasswordSetup) {
+      return { requiresPasswordSetup: true, userId: data.userId, email: data.email, message: data.message };
+    }
     setCustomUser(data.user);
     return data;
   };
