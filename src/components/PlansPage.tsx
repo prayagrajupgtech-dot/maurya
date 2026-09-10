@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 
 declare global {
   interface Window {
@@ -26,18 +26,179 @@ function loadRazorpayCheckout() {
   });
 }
 
+type Step = "form" | "otp" | "checkout";
+
 export default function PlansPage() {
   const [customer, setCustomer] = useState({ email: "", name: "", phone: "" });
   const [accepted, setAccepted] = useState(false);
+  const [step, setStep] = useState<Step>("form");
   const [isStarting, setIsStarting] = useState(false);
   const [message, setMessage] = useState("");
   const [success, setSuccess] = useState(false);
 
-  const startSubscription = async () => {
+  // OTP state
+  const [otp, setOtp] = useState(["", "", "", "", "", ""]);
+  const [otpMessage, setOtpMessage] = useState("");
+  const [isSendingOtp, setIsSendingOtp] = useState(false);
+  const [isVerifyingOtp, setIsVerifyingOtp] = useState(false);
+  const [resendCooldown, setResendCooldown] = useState(0);
+  const otpInputRefs = useRef<(HTMLInputElement | null)[]>([]);
+
+  // Resend cooldown timer
+  useEffect(() => {
+    if (resendCooldown <= 0) return;
+    const timer = setTimeout(() => setResendCooldown(resendCooldown - 1), 1000);
+    return () => clearTimeout(timer);
+  }, [resendCooldown]);
+
+  const validateForm = useCallback((): string | null => {
+    if (!customer.name.trim() || customer.name.trim().length < 3) {
+      return "Please enter your full name.";
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(customer.email.trim())) {
+      return "Please enter a valid email address.";
+    }
+    if (!/^[6-9]\d{9}$/.test(customer.phone.replace(/\D/g, ""))) {
+      return "Please enter a valid 10-digit mobile number.";
+    }
     if (!accepted) {
-      setMessage("Please accept the recurring payment terms.");
+      return "Please accept the recurring payment terms.";
+    }
+    return null;
+  }, [customer, accepted]);
+
+  const sendOtp = async () => {
+    const validationError = validateForm();
+    if (validationError) {
+      setMessage(validationError);
       return;
     }
+
+    setIsSendingOtp(true);
+    setMessage("");
+    setOtpMessage("");
+
+    try {
+      const response = await fetch("/api/send-otp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: customer.email.trim().toLowerCase() })
+      });
+      const result = await response.json();
+      if (!response.ok) {
+        throw new Error(result.error || "Failed to send verification code.");
+      }
+      setStep("otp");
+      setResendCooldown(60);
+      setOtp(["", "", "", "", "", ""]);
+      // Focus first OTP input
+      setTimeout(() => otpInputRefs.current[0]?.focus(), 100);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Failed to send verification code.");
+    } finally {
+      setIsSendingOtp(false);
+    }
+  };
+
+  const handleOtpChange = (index: number, value: string) => {
+    if (!/^\d*$/.test(value)) return;
+    const newOtp = [...otp];
+    newOtp[index] = value.slice(-1);
+    setOtp(newOtp);
+    setOtpMessage("");
+
+    // Auto-advance to next input
+    if (value && index < 5) {
+      otpInputRefs.current[index + 1]?.focus();
+    }
+  };
+
+  const handleOtpKeyDown = (index: number, e: React.KeyboardEvent) => {
+    if (e.key === "Backspace" && !otp[index] && index > 0) {
+      otpInputRefs.current[index - 1]?.focus();
+    }
+    if (e.key === "Enter") {
+      verifyOtpCode();
+    }
+  };
+
+  const handleOtpPaste = (e: React.ClipboardEvent) => {
+    e.preventDefault();
+    const pasted = e.clipboardData.getData("text").replace(/\D/g, "").slice(0, 6);
+    if (!pasted) return;
+    const newOtp = [...otp];
+    for (let i = 0; i < 6; i++) {
+      newOtp[i] = pasted[i] || "";
+    }
+    setOtp(newOtp);
+    // Focus appropriate input
+    const focusIndex = Math.min(pasted.length, 5);
+    otpInputRefs.current[focusIndex]?.focus();
+  };
+
+  const verifyOtpCode = async () => {
+    const otpString = otp.join("");
+    if (otpString.length !== 6) {
+      setOtpMessage("Please enter the complete 6-digit code.");
+      return;
+    }
+
+    setIsVerifyingOtp(true);
+    setOtpMessage("");
+
+    try {
+      const response = await fetch("/api/verify-otp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: customer.email.trim().toLowerCase(),
+          otp: otpString
+        })
+      });
+      const result = await response.json();
+      if (!response.ok) {
+        throw new Error(result.error || "Verification failed.");
+      }
+
+      // Email verified - proceed to Razorpay
+      setStep("checkout");
+      startRazorpayCheckout();
+    } catch (error) {
+      setOtpMessage(error instanceof Error ? error.message : "Verification failed.");
+      // Clear OTP on error
+      setOtp(["", "", "", "", "", ""]);
+      otpInputRefs.current[0]?.focus();
+    } finally {
+      setIsVerifyingOtp(false);
+    }
+  };
+
+  const handleResendOtp = async () => {
+    if (resendCooldown > 0) return;
+    setOtpMessage("");
+    setIsSendingOtp(true);
+
+    try {
+      const response = await fetch("/api/send-otp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: customer.email.trim().toLowerCase() })
+      });
+      const result = await response.json();
+      if (!response.ok) {
+        throw new Error(result.error || "Failed to resend code.");
+      }
+      setResendCooldown(60);
+      setOtp(["", "", "", "", "", ""]);
+      otpInputRefs.current[0]?.focus();
+    } catch (error) {
+      setOtpMessage(error instanceof Error ? error.message : "Failed to resend code.");
+    } finally {
+      setIsSendingOtp(false);
+    }
+  };
+
+  const startRazorpayCheckout = async () => {
     setIsStarting(true);
     setMessage("");
 
@@ -64,6 +225,7 @@ export default function PlansPage() {
           const verification = await verifyResponse.json();
           if (!verifyResponse.ok) {
             setMessage(verification.error || "Payment verification failed.");
+            setStep("form");
             return;
           }
           setSuccess(true);
@@ -73,6 +235,7 @@ export default function PlansPage() {
         modal: {
           ondismiss: () => {
             setMessage("Checkout was closed before completion.");
+            setStep("form");
           }
         },
         name: "Maurya and Company",
@@ -86,14 +249,18 @@ export default function PlansPage() {
       });
       checkout.on("payment.failed", response => {
         setMessage(response.error?.description || "Payment authorization failed.");
+        setStep("form");
       });
       checkout.open();
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Could not start checkout.");
+      setStep("form");
     } finally {
       setIsStarting(false);
     }
   };
+
+  const otpString = otp.join("");
 
   return (
     <div className="min-h-screen bg-[#f8fafc] text-slate-900">
@@ -129,12 +296,72 @@ export default function PlansPage() {
                   <p className="font-black text-emerald-800">Subscription authorized</p>
                   <p className="text-sm text-emerald-700 mt-2">{message}</p>
                 </div>
+              ) : step === "otp" ? (
+                <div className="space-y-4">
+                  <div className="text-center">
+                    <h2 className="font-black text-lg">Verify your email</h2>
+                    <p className="text-sm text-slate-500 mt-1">
+                      We've sent a 6-digit verification code to<br />
+                      <span className="font-bold text-slate-700">{customer.email.trim().toLowerCase()}</span>
+                    </p>
+                  </div>
+
+                  <div className="flex justify-center gap-2">
+                    {otp.map((digit, index) => (
+                      <input
+                        key={index}
+                        ref={el => { otpInputRefs.current[index] = el; }}
+                        type="tel"
+                        inputMode="numeric"
+                        maxLength={1}
+                        value={digit}
+                        onChange={e => handleOtpChange(index, e.target.value)}
+                        onKeyDown={e => handleOtpKeyDown(index, e)}
+                        onPaste={index === 0 ? handleOtpPaste : undefined}
+                        className="w-11 h-12 text-center text-lg font-bold border border-slate-300 rounded-md outline-none focus:border-red-500"
+                        disabled={isVerifyingOtp}
+                      />
+                    ))}
+                  </div>
+
+                  <button
+                    onClick={verifyOtpCode}
+                    disabled={isVerifyingOtp || otpString.length !== 6}
+                    className="w-full bg-[#111827] text-white py-4 rounded-md font-black uppercase tracking-widest disabled:cursor-wait disabled:opacity-60"
+                  >
+                    {isVerifyingOtp ? "Verifying..." : "Verify Email"}
+                  </button>
+
+                  <div className="text-center">
+                    <button
+                      onClick={handleResendOtp}
+                      disabled={resendCooldown > 0 || isSendingOtp}
+                      className="text-sm text-slate-500 hover:text-red-600 disabled:text-slate-300 disabled:cursor-not-allowed"
+                    >
+                      {resendCooldown > 0
+                        ? `Resend code in ${resendCooldown}s`
+                        : isSendingOtp
+                          ? "Sending..."
+                          : "Resend OTP"}
+                    </button>
+                  </div>
+
+                  <button
+                    onClick={() => { setStep("form"); setOtpMessage(""); setOtp(["", "", "", "", "", ""]); }}
+                    className="w-full text-sm text-slate-500 hover:text-slate-700 py-2"
+                  >
+                    ← Back to form
+                  </button>
+
+                  {otpMessage && <p className="text-sm text-center font-bold text-red-600">{otpMessage}</p>}
+                </div>
               ) : (
                 <div className="space-y-4">
                   <input
                     value={customer.name}
                     onChange={event => setCustomer({ ...customer, name: event.target.value })}
                     placeholder="Full name"
+                    disabled={isStarting}
                     className="w-full border border-slate-300 px-4 py-3 rounded-md outline-none focus:border-red-500"
                   />
                   <input
@@ -142,6 +369,7 @@ export default function PlansPage() {
                     value={customer.email}
                     onChange={event => setCustomer({ ...customer, email: event.target.value })}
                     placeholder="Email address"
+                    disabled={isStarting}
                     className="w-full border border-slate-300 px-4 py-3 rounded-md outline-none focus:border-red-500"
                   />
                   <input
@@ -149,6 +377,7 @@ export default function PlansPage() {
                     value={customer.phone}
                     onChange={event => setCustomer({ ...customer, phone: event.target.value })}
                     placeholder="10-digit mobile number"
+                    disabled={isStarting}
                     className="w-full border border-slate-300 px-4 py-3 rounded-md outline-none focus:border-red-500"
                   />
 
@@ -157,6 +386,7 @@ export default function PlansPage() {
                       type="checkbox"
                       checked={accepted}
                       onChange={event => setAccepted(event.target.checked)}
+                      disabled={isStarting}
                       className="mt-0.5 w-4 h-4 accent-red-600"
                     />
                     <span>
@@ -167,11 +397,11 @@ export default function PlansPage() {
                   </label>
 
                   <button
-                    onClick={startSubscription}
-                    disabled={isStarting}
+                    onClick={sendOtp}
+                    disabled={isStarting || isSendingOtp}
                     className="w-full bg-[#111827] text-white py-4 rounded-md font-black uppercase tracking-widest disabled:cursor-wait disabled:opacity-60"
                   >
-                    {isStarting ? "Opening secure checkout..." : "Start free month"}
+                    {isSendingOtp ? "Sending code..." : "Start free month"}
                   </button>
                   {message && <p className="text-sm text-center font-bold text-red-600">{message}</p>}
                 </div>

@@ -6,6 +6,9 @@ import IDCardBack from "./components/IDCardBack";
 import PersonDetailView from "./components/PersonDetailView";
 import PlansPage from "./components/PlansPage";
 import AdminLogin from "./components/AdminLogin";
+import UserLogin from "./components/UserLogin";
+import UserDashboard from "./components/UserDashboard";
+import { useAuth } from "./contexts/AuthContext";
 
 interface PersonData {
   name: string;
@@ -108,10 +111,13 @@ function validatePersonData(data: PersonData): ValidationErrors {
 }
 
 export default function App() {
+  const { session: userSession, loading: authLoading } = useAuth();
   const [viewData, setViewData] = useState<VerificationData | null>(null);
   const [verificationState, setVerificationState] = useState<"idle" | "loading" | "not-found" | "error">("idle");
   const [isPlansPage, setIsPlansPage] = useState(false);
   const [isAdminRoute, setIsAdminRoute] = useState(true);
+  const [isUserLogin, setIsUserLogin] = useState(false);
+  const [isUserDashboard, setIsUserDashboard] = useState(false);
   const [adminSession, setAdminSession] = useState<"checking" | "authenticated" | "unauthenticated">("checking");
   const [formData, setFormData] = useState<PersonData>({ 
     name: "", 
@@ -145,6 +151,8 @@ export default function App() {
       if (hash === "" || hash === "#/admin") {
         setIsPlansPage(false);
         setIsAdminRoute(true);
+        setIsUserLogin(false);
+        setIsUserDashboard(false);
         setViewData(null);
         setVerificationState("idle");
         setAdminSession("checking");
@@ -159,9 +167,25 @@ export default function App() {
         } catch {
           if (currentRequest === requestNumber) setAdminSession("unauthenticated");
         }
+      } else if (hash === "#/user/login") {
+        setIsPlansPage(false);
+        setIsAdminRoute(false);
+        setIsUserLogin(true);
+        setIsUserDashboard(false);
+        setViewData(null);
+        setVerificationState("idle");
+      } else if (hash === "#/user/dashboard") {
+        setIsPlansPage(false);
+        setIsAdminRoute(false);
+        setIsUserLogin(false);
+        setIsUserDashboard(true);
+        setViewData(null);
+        setVerificationState("idle");
       } else if (hash === "#/plans") {
         setIsPlansPage(true);
         setIsAdminRoute(false);
+        setIsUserLogin(false);
+        setIsUserDashboard(false);
         setViewData(null);
         setVerificationState("idle");
       } else if (hash.startsWith("#/verify/")) {
@@ -214,6 +238,8 @@ export default function App() {
       } else {
         setIsPlansPage(true);
         setIsAdminRoute(false);
+        setIsUserLogin(false);
+        setIsUserDashboard(false);
         setViewData(null);
         setVerificationState("idle");
       }
@@ -228,6 +254,24 @@ export default function App() {
 
   if (isPlansPage) {
     return <PlansPage />;
+  }
+
+  if (isUserLogin) {
+    return <UserLogin />;
+  }
+
+  if (isUserDashboard) {
+    if (authLoading) {
+      return (
+        <div className="min-h-screen bg-[#020617] text-white flex items-center justify-center p-6">
+          <p className="text-xs font-black uppercase tracking-[3px] text-white/40">Checking authentication...</p>
+        </div>
+      );
+    }
+    if (!userSession) {
+      return <UserLogin />;
+    }
+    return <UserDashboard />;
   }
 
   if (isAdminRoute && adminSession === "checking") {
