@@ -140,6 +140,11 @@ export default function UserLogin() {
               <p className="text-xs text-white/50 text-center">
                 Sign in with your Google account to access your user dashboard.
               </p>
+              {!import.meta.env.VITE_GOOGLE_CLIENT_ID && (
+                <p className="text-[10px] text-amber-400 text-center bg-amber-500/10 border border-amber-500/20 p-3 rounded-xl">
+                  Google Sign-In not configured. Set <code className="font-mono">VITE_GOOGLE_CLIENT_ID</code> in .env
+                </p>
+              )}
               <button
                 onClick={signInWithGoogle}
                 disabled={loading}

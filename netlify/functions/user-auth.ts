@@ -159,7 +159,147 @@ export default async (request: Request) => {
       }, 200);
     }
 
-    // 3. SETUP PASSWORD (first-time user created by admin)
+    // 3. GOOGLE SIGN-IN (verifies Google ID token)
+    if (action === "login-google") {
+      const credential = typeof body.credential === "string" ? body.credential : "";
+      if (!credential) {
+        return jsonResponse({ error: "Google credential is required." }, 400);
+      }
+
+      // Verify the Google ID token using Google's tokeninfo endpoint
+      let googleUser: { email: string; name: string; picture?: string; sub: string };
+      try {
+        const tokenRes = await fetch(`https://oauth2.googleapis.com/tokeninfo?id_token=${credential}`);
+        if (!tokenRes.ok) {
+          return jsonResponse({ error: "Invalid Google token. Please try again." }, 401);
+        }
+        googleUser = await tokenRes.json();
+      } catch {
+        return jsonResponse({ error: "Failed to verify Google token." }, 500);
+      }
+
+      const email = googleUser.email?.toLowerCase();
+      const name = googleUser.name || email?.split("@")[0] || "Google User";
+      const picture = googleUser.picture || "";
+
+      if (!email) {
+        return jsonResponse({ error: "Google account has no email." }, 400);
+      }
+
+      if (isSupabaseConfigured()) {
+        const supabase = getSupabaseAdmin();
+
+        // Find or create user profile
+        let { data: profile } = await supabase
+          .from("user_profiles")
+          .select("id, email, display_name, status, role, plan_id")
+          .eq("email", email)
+          .maybeSingle();
+
+        if (!profile) {
+          // Create new user profile for Google sign-in
+          const { data: authData, error: authError } = await supabase.auth.admin.createUser({
+            email,
+            email_confirm: true,
+            user_metadata: { name, avatar_url: picture }
+          });
+
+          if (authError) {
+            // If user already exists in auth, just find them
+            const { data: existingAuth } = await supabase.auth.admin.listUsers();
+            const existingUser = existingAuth?.users?.find(u => u.email === email);
+            if (existingUser) {
+              profile = {
+                id: existingUser.id,
+                email,
+                display_name: name,
+                status: "active",
+                role: "user",
+                plan_id: null
+              };
+            } else {
+              console.error("Google login createUser error", authError);
+              return jsonResponse({ error: "Could not create Google account." }, 500);
+            }
+          } else {
+            // Create profile for the new auth user
+            await supabase.from("user_profiles").insert({
+              id: authData.user.id,
+              email,
+              display_name: name,
+              role: "user",
+              status: "active",
+              password_configured: true,
+              last_login_at: new Date().toISOString()
+            });
+
+            profile = {
+              id: authData.user.id,
+              email,
+              display_name: name,
+              status: "active",
+              role: "user",
+              plan_id: null
+            };
+          }
+        }
+
+        if (profile.status === "blocked") {
+          return jsonResponse({ error: "Your account has been blocked by the administrator." }, 403);
+        }
+
+        // Update last login
+        await supabase
+          .from("user_profiles")
+          .update({ last_login_at: new Date().toISOString() })
+          .eq("id", profile.id);
+
+        // If user has pending status (admin created card for them), activate on Google login
+        if (profile.status === "pending") {
+          await supabase
+            .from("user_profiles")
+            .update({ status: "active", password_configured: true })
+            .eq("id", profile.id);
+        }
+
+        return jsonResponse({
+          user: {
+            id: profile.id,
+            email,
+            name: profile.display_name || name,
+            role: profile.role || "user",
+            status: "active"
+          }
+        }, 200);
+      }
+
+      // Local store fallback
+      let user = await getUserByEmail(email);
+      if (!user) {
+        user = await saveUser({
+          email,
+          display_name: name,
+          role: "user",
+          status: "active"
+        });
+      }
+
+      if (user.status === "blocked") {
+        return jsonResponse({ error: "Your account has been blocked by the administrator." }, 403);
+      }
+
+      return jsonResponse({
+        user: {
+          id: user.id,
+          email: user.email,
+          name: user.display_name,
+          role: user.role,
+          status: user.status
+        }
+      }, 200);
+    }
+
+    // 4. SETUP PASSWORD (first-time user created by admin)
     if (action === "setup-password") {
       const email = typeof body.email === "string" ? body.email.trim().toLowerCase() : "";
       const password = typeof body.password === "string" ? body.password : "";
@@ -259,7 +399,7 @@ export default async (request: Request) => {
       }, 200);
     }
 
-    // 4. FORGOT PASSWORD REQUEST
+    // 5. FORGOT PASSWORD REQUEST
     if (action === "forgot-password") {
       const email = typeof body.email === "string" ? body.email.trim().toLowerCase() : "";
       if (!email) return jsonResponse({ error: "Please enter your registered email address." }, 400);
