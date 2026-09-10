@@ -1,6 +1,6 @@
 import { jsonResponse } from "./_shared/http.js";
 import { getSupabaseAdmin, isSupabaseConfigured } from "./_shared/supabase.js";
-import { getAllCards, getAllUsers, getPlanById } from "./_shared/store.js";
+import { getAllCards, getPlanById } from "./_shared/store.js";
 
 export default async (request: Request) => {
   if (request.method !== "GET") {

@@ -1,5 +1,5 @@
 import { jsonResponse, readJsonBody, sha256 } from "./_shared/http.js";
-import { getUserByEmail, saveUser, getAllUsers, getPlanById } from "./_shared/store.js";
+import { getUserByEmail, saveUser, getAllUsers } from "./_shared/store.js";
 import { isSupabaseConfigured, getSupabaseAdmin } from "./_shared/supabase.js";
 
 function normalizePhone(phone: string): string {

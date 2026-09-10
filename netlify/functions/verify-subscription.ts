@@ -98,8 +98,8 @@ export default async (request: Request) => {
           }
         });
 
-        if (!authError && authUser?.id) {
-          userId = authUser.id;
+        if (!authError && authUser?.user?.id) {
+          userId = authUser.user.id;
           accountCreated = true;
 
           // Create user profile
