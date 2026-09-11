@@ -7,6 +7,7 @@ const TIME_RANGES = [
   { value: "month", label: "This Month" },
   { value: "last_month", label: "Last Month" },
   { value: "year", label: "This Year" },
+  { value: "last_year", label: "Last Year" },
   { value: "all", label: "All Time" },
 ];
 
@@ -15,7 +16,8 @@ const MONTHS = [
   "July", "August", "September", "October", "November", "December",
 ];
 
-const YEARS = [2024, 2025, 2026];
+const currentYear = new Date().getFullYear();
+const YEARS = [currentYear - 2, currentYear - 1, currentYear, currentYear + 1];
 
 interface BarChartItem {
   label: string;
@@ -106,8 +108,9 @@ export default function AdminAnalytics() {
   const { theme } = useTheme();
   const [stats, setStats] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [filtering, setFiltering] = useState(false);
   const [error, setError] = useState("");
-  const [timeRange, setTimeRange] = useState<"today" | "week" | "month" | "last_month" | "year" | "all">("month");
+  const [timeRange, setTimeRange] = useState<"today" | "week" | "month" | "last_month" | "year" | "last_year" | "all">("month");
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth());
 
@@ -118,8 +121,9 @@ export default function AdminAnalytics() {
   const innerCard = isDark ? "bg-black/30 border-white/5" : "bg-gray-50 border-gray-200";
 
   useEffect(() => {
+    let cancelled = false;
     async function fetchStats() {
-      setLoading(true);
+      if (stats !== null) setFiltering(true);
       setError("");
       try {
         const params = new URLSearchParams({
@@ -127,17 +131,23 @@ export default function AdminAnalytics() {
           year: String(selectedYear),
           month: String(selectedMonth),
         });
-        const response = await fetch(`/api/admin-stats?${params}`);
+        const response = await fetch(`/api/admin-analytics?${params}`);
         const data = await response.json();
-        if (response.ok) setStats(data);
-        else setError(data.error || "Failed to load analytics.");
+        if (!cancelled) {
+          if (response.ok) setStats(data);
+          else setError(data.error || "Failed to load analytics.");
+        }
       } catch {
-        setError("Network error fetching analytics.");
+        if (!cancelled) setError("Network error fetching analytics.");
       } finally {
-        setLoading(false);
+        if (!cancelled) {
+          setLoading(false);
+          setFiltering(false);
+        }
       }
     }
     fetchStats();
+    return () => { cancelled = true; };
   }, [timeRange, selectedYear, selectedMonth]);
 
   if (loading) {
@@ -219,11 +229,21 @@ export default function AdminAnalytics() {
     Unassigned: "bg-gray-500",
   };
 
+  const isMonthMode = timeRange === "month" || timeRange === "last_month";
+
   return (
     <div className="space-y-8">
       {/* Header with Filters */}
       <div className="flex flex-wrap items-center gap-4">
-        <h2 className={`text-xl font-black uppercase tracking-widest ${textMain}`}>Analysis</h2>
+        <div>
+          <h2 className={`text-xl font-black uppercase tracking-widest ${textMain}`}>Analysis</h2>
+          {stats.reportLabel && (
+            <p className={`text-xs font-bold ${textSub} mt-1`}>{stats.reportLabel}</p>
+          )}
+        </div>
+        {filtering && (
+          <span className={`text-xs font-bold ${textSub} animate-pulse`}>Updating...</span>
+        )}
         <div className="flex flex-wrap gap-3 ml-auto">
           <select
             value={timeRange}
@@ -237,7 +257,8 @@ export default function AdminAnalytics() {
           <select
             value={selectedYear}
             onChange={(e) => setSelectedYear(Number(e.target.value))}
-            className={`${card} border px-4 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider ${textMain} focus:outline-none focus:ring-2 focus:ring-amber-500/50`}
+            disabled={timeRange === "today" || timeRange === "week" || timeRange === "all"}
+            className={`${card} border px-4 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider ${textMain} focus:outline-none focus:ring-2 focus:ring-amber-500/50 disabled:opacity-40 disabled:cursor-not-allowed`}
           >
             {YEARS.map((y) => (
               <option key={y} value={y}>{y}</option>
@@ -246,7 +267,8 @@ export default function AdminAnalytics() {
           <select
             value={selectedMonth}
             onChange={(e) => setSelectedMonth(Number(e.target.value))}
-            className={`${card} border px-4 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider ${textMain} focus:outline-none focus:ring-2 focus:ring-amber-500/50`}
+            disabled={!isMonthMode}
+            className={`${card} border px-4 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider ${textMain} focus:outline-none focus:ring-2 focus:ring-amber-500/50 disabled:opacity-40 disabled:cursor-not-allowed`}
           >
             {MONTHS.map((m, i) => (
               <option key={i} value={i}>{m}</option>

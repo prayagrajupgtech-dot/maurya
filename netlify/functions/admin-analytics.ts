@@ -17,7 +17,7 @@ function computeUsersByPlan(users: { plan_id: string | null }[], plans: { id: st
   const planMap = new Map(plans.map(p => [p.id, p.name]));
   const map: Record<string, number> = {};
   for (const u of users) {
-    const name = u.plan_id ? (planMap.get(u.plan_id) || "Unknown") : "Free";
+    const name = u.plan_id ? (planMap.get(u.plan_id) || "Unknown Plan") : "Unassigned";
     map[name] = (map[name] || 0) + 1;
   }
   return map;
@@ -57,30 +57,60 @@ export default async (request: Request) => {
   const month = parseInt(url.searchParams.get("month") || String(new Date().getMonth()));
 
   const now = new Date();
+  const currentYear = now.getFullYear();
+  const currentMonth = now.getMonth();
 
+  // Compute date boundaries using [start, end) pattern
   let startDate: Date;
+  let endDate: Date;
+  let reportLabel: string;
+
   switch (range) {
     case "today":
       startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      endDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+      reportLabel = `Today — ${now.toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" })}`;
       break;
     case "week":
       startDate = new Date(now.getTime() - 7 * 86400000);
+      endDate = new Date(now.getTime() + 86400000);
+      reportLabel = "This Week (last 7 days)";
       break;
     case "month":
       startDate = new Date(year, month, 1);
+      endDate = new Date(year, month + 1, 1);
+      reportLabel = `${MONTH_NAMES[month]} ${year}`;
       break;
-    case "last_month":
-      startDate = new Date(year, month - 1, 1);
+    case "last_month": {
+      const lm = month === 0 ? 11 : month - 1;
+      const ly = month === 0 ? year - 1 : year;
+      startDate = new Date(ly, lm, 1);
+      endDate = new Date(ly, lm + 1, 1);
+      reportLabel = `${MONTH_NAMES[lm]} ${ly}`;
       break;
+    }
     case "year":
       startDate = new Date(year, 0, 1);
+      endDate = new Date(year + 1, 0, 1);
+      reportLabel = `Year ${year}`;
       break;
-    default:
+    case "last_year":
+      startDate = new Date(year - 1, 0, 1);
+      endDate = new Date(year, 0, 1);
+      reportLabel = `Year ${year - 1}`;
+      break;
+    default: // "all"
       startDate = new Date(0);
+      endDate = new Date(now.getTime() + 86400000);
+      reportLabel = "All Time";
   }
-  const endDate = range === "last_month" ? new Date(year, month, 1) : now;
 
-  const [users, cards, applications, payments, plans] = await Promise.all([
+  const inRange = (dateStr: string) => {
+    const d = new Date(dateStr);
+    return d >= startDate && d < endDate;
+  };
+
+  const [allUsers, allCards, allApplications, allPayments, plans] = await Promise.all([
     getAllUsers(),
     getAllCards(),
     getAllApplications(),
@@ -88,32 +118,59 @@ export default async (request: Request) => {
     getAllPlans(),
   ]);
 
-  const filteredUsers = users.filter(u => {
-    const d = new Date(u.created_at);
-    return d >= startDate && d <= endDate;
-  });
+  // Filter by date range
+  const filteredUsers = allUsers.filter(u => inRange(u.created_at));
+  const filteredCards = allCards.filter(c => inRange(c.created_at));
+  const filteredApplications = allApplications.filter(a => inRange(a.created_at));
+  const filteredPayments = allPayments.filter(p => inRange(p.created_at));
+
+  // Summary cards — use filtered data
+  const totalUsers = filteredUsers.length;
+  const activeUsers = filteredUsers.filter(u => u.status === "active").length;
+  const blockedUsers = filteredUsers.filter(u => u.status === "blocked").length;
+  const totalCards = filteredCards.length;
+  const activeCards = filteredCards.filter(c => c.status === "active").length;
+  const expiredCards = filteredCards.filter(c => c.status === "expired").length;
+  const totalApplications = filteredApplications.length;
+  const completedApplications = filteredApplications.filter(a => a.completion_percentage === 100).length;
+  const pendingApplications = filteredApplications.filter(a => a.status === "draft" || a.status === "incomplete").length;
+  const totalPayments = filteredPayments.length;
+  const successfulPayments = filteredPayments.filter(p => p.status === "success").length;
+  const failedPayments = filteredPayments.filter(p => p.status === "failed").length;
+  const pendingPayments = filteredPayments.filter(p => p.status === "pending" || p.status === "created").length;
+  const totalRevenue = successfulPayments > 0
+    ? filteredPayments.filter(p => p.status === "success").reduce((sum, p) => sum + (p.amount / 100), 0)
+    : 0;
+
+  // Plan distribution — only from filtered users
+  const usersByPlan = computeUsersByPlan(filteredUsers, plans);
+  const usersByCountry = computeUsersByCountry(filteredUsers);
+
+  // Monthly charts — use the selected year for monthly breakdown
+  const monthlyUsers = computeMonthly(allUsers, year);
+  const monthlyRevenue = computeMonthlyRevenue(allPayments, year);
+  const monthlyApplications = computeMonthly(allApplications, year);
 
   return jsonResponse({
-    totalUsers: users.length,
-    activeUsers: users.filter(u => u.status === "active").length,
-    blockedUsers: users.filter(u => u.status === "blocked").length,
-    newUsersThisMonth: filteredUsers.length,
-    totalCards: cards.length,
-    activeCards: cards.filter(c => c.status === "active").length,
-    expiredCards: cards.filter(c => c.status === "expired").length,
-    totalApplications: applications.length,
-    completedApplications: applications.filter(a => a.completion_percentage === 100).length,
-    pendingApplications: applications.filter(a => a.status === "draft" || a.status === "incomplete").length,
-    totalPayments: payments.length,
-    successfulPayments: payments.filter(p => p.status === "success").length,
-    failedPayments: payments.filter(p => p.status === "failed").length,
-    pendingPayments: payments.filter(p => p.status === "pending" || p.status === "created").length,
-    totalRevenue: payments.filter(p => p.status === "success").reduce((sum, p) => sum + (p.amount / 100), 0),
-    thisMonthRevenue: payments.filter(p => p.status === "success" && new Date(p.created_at) >= startDate && new Date(p.created_at) <= endDate).reduce((sum, p) => sum + (p.amount / 100), 0),
-    usersByCountry: computeUsersByCountry(users),
-    usersByPlan: computeUsersByPlan(users, plans),
-    monthlyUsers: computeMonthly(users, year),
-    monthlyRevenue: computeMonthlyRevenue(payments, year),
-    monthlyApplications: computeMonthly(applications, year),
+    reportLabel,
+    totalUsers,
+    activeUsers,
+    blockedUsers,
+    totalCards,
+    activeCards,
+    expiredCards,
+    totalApplications,
+    completedApplications,
+    pendingApplications,
+    totalPayments,
+    successfulPayments,
+    failedPayments,
+    pendingPayments,
+    totalRevenue,
+    usersByCountry,
+    usersByPlan,
+    monthlyUsers,
+    monthlyRevenue,
+    monthlyApplications,
   });
 };
