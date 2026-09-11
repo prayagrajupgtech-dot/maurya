@@ -1,3 +1,5 @@
+import fs from "fs";
+import path from "path";
 import { getSupabaseAdmin, isSupabaseConfigured } from "./supabase.js";
 
 export interface PlanRecord {
@@ -35,6 +37,7 @@ export interface CardApplicationRecord {
   plan_id: string | null;
   full_name: string;
   phone: string;
+  parent_phone: string | null;
   country: string;
   country_code: string;
   date_of_birth: string | null;
@@ -204,6 +207,36 @@ const mockLogs: ActivityLog[] = [
   }
 ];
 
+// File persistence for local plans store when Supabase is not connected
+const DATA_DIR = path.resolve(process.cwd(), ".data");
+const PLANS_FILE = path.join(DATA_DIR, "plans.json");
+
+function loadPlansFromDisk(): PlanRecord[] {
+  try {
+    if (fs.existsSync(PLANS_FILE)) {
+      const content = fs.readFileSync(PLANS_FILE, "utf-8");
+      const parsed = JSON.parse(content);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        return parsed;
+      }
+    }
+  } catch (e) {
+    console.warn("Could not load plans from disk:", e);
+  }
+  return mockPlans;
+}
+
+function savePlansToDisk(plans: PlanRecord[]) {
+  try {
+    if (!fs.existsSync(DATA_DIR)) {
+      fs.mkdirSync(DATA_DIR, { recursive: true });
+    }
+    fs.writeFileSync(PLANS_FILE, JSON.stringify(plans, null, 2), "utf-8");
+  } catch (e) {
+    console.warn("Could not save plans to disk:", e);
+  }
+}
+
 // --- HELPER FUNCTIONS ---
 
 export async function getAllPlans(): Promise<PlanRecord[]> {
@@ -216,7 +249,7 @@ export async function getAllPlans(): Promise<PlanRecord[]> {
       console.warn("Supabase fetch plans failed, falling back to local store", e);
     }
   }
-  return mockPlans;
+  return loadPlansFromDisk();
 }
 
 export async function getPlanById(id: string): Promise<PlanRecord | null> {
@@ -241,11 +274,13 @@ export async function savePlan(plan: Partial<PlanRecord>): Promise<PlanRecord> {
     }
   }
 
+  const plans = loadPlansFromDisk();
   if (plan.id) {
-    const idx = mockPlans.findIndex(p => p.id === plan.id);
+    const idx = plans.findIndex(p => p.id === plan.id);
     if (idx !== -1) {
-      mockPlans[idx] = { ...mockPlans[idx], ...plan, updated_at: now } as PlanRecord;
-      return mockPlans[idx];
+      plans[idx] = { ...plans[idx], ...plan, updated_at: now } as PlanRecord;
+      savePlansToDisk(plans);
+      return plans[idx];
     }
   }
   const newPlan: PlanRecord = {
@@ -258,7 +293,8 @@ export async function savePlan(plan: Partial<PlanRecord>): Promise<PlanRecord> {
     created_at: now,
     updated_at: now
   };
-  mockPlans.push(newPlan);
+  plans.push(newPlan);
+  savePlansToDisk(plans);
   return newPlan;
 }
 
@@ -272,9 +308,11 @@ export async function deletePlanStore(id: string): Promise<boolean> {
       console.warn("Supabase delete plan failed", e);
     }
   }
-  const idx = mockPlans.findIndex(p => p.id === id);
+  const plans = loadPlansFromDisk();
+  const idx = plans.findIndex(p => p.id === id);
   if (idx !== -1) {
-    mockPlans.splice(idx, 1);
+    plans.splice(idx, 1);
+    savePlansToDisk(plans);
     return true;
   }
   return false;

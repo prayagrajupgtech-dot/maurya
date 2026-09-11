@@ -10,7 +10,7 @@ import {
   getCardsByUserId,
   saveNotification
 } from "./_shared/store.js";
-import { getRazorpayConfig, verifyHmac } from "./_shared/razorpay.js";
+import { getRazorpayOrderConfig, verifyHmac } from "./_shared/razorpay.js";
 
 export default async (request: Request) => {
   if (request.method !== "POST") return jsonResponse({ error: "Method not allowed." }, 405);
@@ -44,7 +44,7 @@ export default async (request: Request) => {
       const plan = application.plan_id ? await getPlanById(application.plan_id) : null;
       if (!plan) return jsonResponse({ error: "Plan not found for this application." }, 400);
 
-      const { keyId, keySecret } = getRazorpayConfig();
+      const { keyId, keySecret } = getRazorpayOrderConfig();
       const amount = plan.price * 100;
       const currency = plan.currency || "INR";
 
@@ -103,7 +103,7 @@ export default async (request: Request) => {
         return jsonResponse({ error: "Incomplete payment verification data." }, 400);
       }
 
-      const { keySecret } = getRazorpayConfig();
+      const { keySecret } = getRazorpayOrderConfig();
       const signatureValid = verifyHmac(`${razorpayPaymentId}|${razorpayOrderId}`, razorpaySignature, keySecret);
       if (!signatureValid) {
         return jsonResponse({ error: "Payment signature verification failed." }, 400);
@@ -194,7 +194,7 @@ export default async (request: Request) => {
     const signature = request.headers.get("x-razorpay-signature") || "";
 
     try {
-      const { webhookSecret } = getRazorpayConfig();
+      const { webhookSecret } = getRazorpayOrderConfig();
       if (!webhookSecret || !verifyHmac(rawBody, signature, webhookSecret)) {
         return jsonResponse({ error: "Invalid webhook signature." }, 401);
       }
@@ -327,3 +327,4 @@ export default async (request: Request) => {
 
   return jsonResponse({ error: "Invalid action." }, 400);
 };
+

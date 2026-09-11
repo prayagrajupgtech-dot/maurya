@@ -48,6 +48,7 @@ export default async (request: Request) => {
       const planId = typeof body.plan_id === "string" ? body.plan_id : null;
       const fullName = typeof body.full_name === "string" ? body.full_name.trim() : "";
       const phone = typeof body.phone === "string" ? body.phone.trim() : "";
+      const parentPhone = typeof body.parent_phone === "string" ? body.parent_phone.trim() : null;
       const country = typeof body.country === "string" ? body.country.trim() : "";
       const countryCode = typeof body.country_code === "string" ? body.country_code.trim() : "";
       const dateOfBirth = typeof body.date_of_birth === "string" ? body.date_of_birth.trim() : "";
@@ -92,6 +93,7 @@ export default async (request: Request) => {
         plan_id: planId,
         full_name: fullName,
         phone,
+        parent_phone: parentPhone,
         country,
         country_code: countryCode,
         date_of_birth: dateOfBirth || null,

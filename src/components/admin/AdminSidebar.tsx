@@ -25,6 +25,7 @@ export default function AdminSidebar({ currentTab, onNavigate, onLogout }: Admin
     { id: "applications", label: "Applications", icon: "📝" },
     { id: "plans", label: "Plans", icon: "💎" },
     { id: "cards", label: "Cards / Generated", icon: "🪪" },
+    { id: "create-card", label: "Create Card", icon: "➕" },
     { id: "notifications", label: "Notifications", icon: "🔔", badge: unreadCount },
     { id: "profile", label: "Profile", icon: "👤" },
     { id: "activity", label: "Activity / Logs", icon: "📜" },

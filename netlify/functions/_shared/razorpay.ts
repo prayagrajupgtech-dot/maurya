@@ -6,10 +6,10 @@ function getRequiredEnv(name: string) {
   return value;
 }
 
-export function getRazorpayConfig() {
+// For one-time payment orders (card issuance) — only KEY_ID and KEY_SECRET required
+export function getRazorpayOrderConfig() {
   const keyId = getRequiredEnv("RAZORPAY_KEY_ID");
   const keySecret = getRequiredEnv("RAZORPAY_KEY_SECRET");
-  const planId = getRequiredEnv("RAZORPAY_PLAN_ID");
 
   if (keyId.includes("your_key_id")) {
     throw new Error("RAZORPAY_KEY_ID in .env is using a placeholder. Replace it with your actual Razorpay Key ID (e.g. rzp_test_...).");
@@ -17,14 +17,22 @@ export function getRazorpayConfig() {
   if (keySecret.includes("your-server-only-key-secret")) {
     throw new Error("RAZORPAY_KEY_SECRET in .env is using a placeholder. Replace it with your actual Razorpay Key Secret.");
   }
-  if (planId.includes("your_plan_id")) {
+
+  const webhookSecret = process.env.RAZORPAY_WEBHOOK_SECRET?.trim() || "";
+  return { keyId, keySecret, webhookSecret };
+}
+
+// For subscriptions — requires PLAN_ID in addition
+export function getRazorpayConfig() {
+  const { keyId, keySecret, webhookSecret } = getRazorpayOrderConfig();
+  const planId = getRequiredEnv("RAZORPAY_PLAN_ID");
+
+  if (planId.includes("your_plan_id") || planId.includes("REPLACE_WITH")) {
     throw new Error("RAZORPAY_PLAN_ID in .env is using a placeholder. Create a Subscription Plan in Razorpay Dashboard and set its ID in .env.");
   }
   if (planId.startsWith("rzp_test_") || planId.startsWith("rzp_live_")) {
     throw new Error(`RAZORPAY_PLAN_ID is set to "${planId}" which is a Razorpay Key ID, not a Plan ID. Plan IDs in Razorpay start with "plan_". Please create a Plan in Razorpay Dashboard (Subscriptions -> Plans) and set its ID in .env.`);
   }
-
-  const webhookSecret = process.env.RAZORPAY_WEBHOOK_SECRET?.trim() || "";
 
   return { keyId, keySecret, planId, webhookSecret };
 }

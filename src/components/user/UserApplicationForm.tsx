@@ -16,6 +16,7 @@ interface Application {
   plan_id: string;
   full_name: string;
   phone: string;
+  parent_phone: string | null;
   country: string;
   country_code: string;
   date_of_birth: string;
@@ -24,6 +25,34 @@ interface Application {
   photo_url: string;
   status: string;
   completion_percentage: number;
+}
+
+type RazorpayConstructor = new (options: Record<string, unknown>) => {
+  open: () => void;
+  on: (event: string, handler: () => void) => void;
+};
+
+function loadRazorpayCheckout(): Promise<boolean> {
+  if ((window as typeof window & { Razorpay?: RazorpayConstructor }).Razorpay) return Promise.resolve(true);
+
+  return new Promise(resolve => {
+    const selector = 'script[src="https://checkout.razorpay.com/v1/checkout.js"]';
+    const existingScript = document.querySelector<HTMLScriptElement>(selector);
+    if (existingScript?.dataset.loadFailed === "true") existingScript.remove();
+    const script = document.querySelector<HTMLScriptElement>(selector) || document.createElement("script");
+    const finish = () => resolve(Boolean((window as typeof window & { Razorpay?: RazorpayConstructor }).Razorpay));
+
+    script.addEventListener("load", finish, { once: true });
+    script.addEventListener("error", () => {
+      script.dataset.loadFailed = "true";
+      resolve(false);
+    }, { once: true });
+    if (!script.isConnected) {
+      script.src = "https://checkout.razorpay.com/v1/checkout.js";
+      script.async = true;
+      document.body.appendChild(script);
+    }
+  });
 }
 
 export default function UserApplicationForm() {
@@ -39,6 +68,7 @@ export default function UserApplicationForm() {
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
+  const [parentPhone, setParentPhone] = useState("");
   const [country, setCountry] = useState("IN");
   const [dateOfBirth, setDateOfBirth] = useState("");
   const [address, setAddress] = useState("");
@@ -55,14 +85,9 @@ export default function UserApplicationForm() {
   const selectedCountryData = countries.find(c => c.code === country);
   const callingCode = selectedCountryData?.callingCode || "+91";
 
-  // Load Razorpay script
+  // Start loading checkout early, but wait for it before creating a payment order.
   useEffect(() => {
-    if (!document.querySelector('script[src="https://checkout.razorpay.com/v1/checkout.js"]')) {
-      const script = document.createElement("script");
-      script.src = "https://checkout.razorpay.com/v1/checkout.js";
-      script.async = true;
-      document.body.appendChild(script);
-    }
+    void loadRazorpayCheckout();
   }, []);
 
   // Fetch plans and existing application on mount
@@ -75,20 +100,24 @@ export default function UserApplicationForm() {
           fetch("/api/user-applications", { headers: getAuthHeaders() })
         ]);
 
+        let fetchedPlans: Plan[] = [];
         if (plansRes.ok) {
           const plansData = await plansRes.json();
-          setPlans(plansData.plans || plansData || []);
+          fetchedPlans = plansData.plans || (Array.isArray(plansData) ? plansData : []);
+          setPlans(fetchedPlans);
         }
 
+        let selectedId = "";
         if (appsRes.ok) {
           const appsData = await appsRes.json();
-          const apps = appsData.applications || appsData || [];
+          const apps = appsData.applications || (Array.isArray(appsData) ? appsData : []);
           if (apps.length > 0) {
             const app = apps[0];
             setApplication(app);
             setFullName(app.full_name || "");
             setEmail(app.email || "");
             setPhone(app.phone || "");
+            setParentPhone(app.parent_phone || "");
             if (app.country) {
               const found = countries.find(c => c.name === app.country || c.code === app.country_code);
               if (found) setCountry(found.code);
@@ -96,9 +125,13 @@ export default function UserApplicationForm() {
             setDateOfBirth(app.date_of_birth || "");
             setAddress(app.address || "");
             setPhoto(app.photo_url || "");
-            setSelectedPlanId(app.plan_id || "");
+            if (app.plan_id) selectedId = app.plan_id;
           }
         }
+        if (!selectedId && fetchedPlans.length > 0) {
+          selectedId = fetchedPlans[0].id;
+        }
+        if (selectedId) setSelectedPlanId(selectedId);
       } catch {
         setError("Failed to load initial data.");
       } finally {
@@ -108,7 +141,7 @@ export default function UserApplicationForm() {
     init();
   }, []);
 
-  // Progress calculation - MUST match backend weights
+  // Progress calculation - MUST match backend weights.
   const calculateProgress = (): number => {
     let total = 0;
     if (fullName.trim()) total += 15;
@@ -116,6 +149,7 @@ export default function UserApplicationForm() {
     if (country.trim()) total += 10;
     if (dateOfBirth.trim()) total += 15;
     if (address.trim()) total += 15;
+    if (email.trim()) total += 10;
     if (selectedPlanId) total += 10;
     if (photo) total += 10;
     return Math.min(total, 100);
@@ -130,6 +164,7 @@ export default function UserApplicationForm() {
     if (!country.trim()) missing.push("Country");
     if (!dateOfBirth.trim()) missing.push("Date of Birth");
     if (!address.trim()) missing.push("Address");
+    if (!email.trim()) missing.push("Email");
     if (!selectedPlanId) missing.push("Plan Selection");
     if (!photo) missing.push("Photo");
     return missing;
@@ -173,9 +208,16 @@ export default function UserApplicationForm() {
   };
 
   const openRazorpay = (orderId: string, amount: number, key: string) => {
+    const Razorpay = (window as typeof window & { Razorpay?: RazorpayConstructor }).Razorpay;
+    if (!Razorpay) {
+      setError("Secure payment checkout could not be loaded. Please check your internet connection and try again.");
+      return;
+    }
+
     const options = {
       key,
-      amount: amount * 100,
+      // The server already returns Razorpay's smallest currency unit (paise).
+      amount,
       currency: "INR",
       name: "Maurya Generator",
       description: "Card Issuance Payment",
@@ -215,7 +257,7 @@ export default function UserApplicationForm() {
         }
       }
     };
-    const rzp = new (window as any).Razorpay(options);
+    const rzp = new Razorpay(options);
     rzp.on("payment.failed", () => setError("Payment failed. Please try again."));
     rzp.open();
   };
@@ -229,6 +271,7 @@ export default function UserApplicationForm() {
         plan_id: selectedPlanId || null,
         full_name: fullName,
         phone,
+        parent_phone: parentPhone || null,
         country: selectedCountryData?.name || "India",
         country_code: callingCode,
         date_of_birth: dateOfBirth,
@@ -271,6 +314,7 @@ export default function UserApplicationForm() {
         plan_id: selectedPlanId,
         full_name: fullName,
         phone,
+        parent_phone: parentPhone || null,
         country: selectedCountryData?.name || "India",
         country_code: callingCode,
         date_of_birth: dateOfBirth,
@@ -301,15 +345,63 @@ export default function UserApplicationForm() {
   };
 
   const handleIssueCard = async () => {
-    if (!application?.id) return;
+    if (!application?.id && !isComplete) {
+      setError("Please complete all required fields before issuing a card.");
+      return;
+    }
     setIssuing(true);
     setError("");
     setSuccess("");
     try {
+      // Auto-save the draft first to make sure application exists and is up-to-date
+      let appId = application?.id;
+      if (!appId || (application?.status !== "submitted" && application?.status !== "completed")) {
+        const body: any = {
+          plan_id: selectedPlanId || null,
+          full_name: fullName,
+          phone,
+          parent_phone: parentPhone || null,
+          country: selectedCountryData?.name || "India",
+          country_code: callingCode,
+          date_of_birth: dateOfBirth,
+          address,
+          email,
+          photo_url: photo || null,
+          status: "submitted",
+        };
+        if (appId) body.id = appId;
+
+        const saveRes = await fetch("/api/user-applications", {
+          method: "POST",
+          headers: getAuthHeaders(),
+          body: JSON.stringify(body),
+        });
+        const saveData = await saveRes.json();
+        if (!saveRes.ok) {
+          setError(saveData.error || "Failed to save application before payment.");
+          setIssuing(false);
+          return;
+        }
+        appId = saveData.application?.id;
+        if (saveData.application) setApplication(saveData.application);
+      }
+
+      if (!appId) {
+        setError("Could not create application. Please try again.");
+        setIssuing(false);
+        return;
+      }
+
+      const checkoutLoaded = await loadRazorpayCheckout();
+      if (!checkoutLoaded) {
+        setError("Secure payment checkout could not be loaded. Please check your internet connection and try again.");
+        return;
+      }
+
       const res = await fetch("/api/user-payment", {
         method: "POST",
         headers: getAuthHeaders(),
-        body: JSON.stringify({ action: "create", applicationId: application.id }),
+        body: JSON.stringify({ action: "create", applicationId: appId }),
       });
       const data = await res.json();
       if (res.ok) {
@@ -324,9 +416,9 @@ export default function UserApplicationForm() {
     }
   };
 
-  // Issue card is enabled when: submitted OR completed OR 100% complete, AND not already issued
+  // Issue card is enabled when form is 100% complete or already submitted/completed, and not already issued/pending
   const canIssueCard =
-    (application?.status === "submitted" || application?.status === "completed" || (isComplete && application?.status !== "card_issued")) &&
+    isComplete &&
     application?.status !== "card_issued" &&
     application?.status !== "payment_pending";
 
@@ -376,7 +468,7 @@ export default function UserApplicationForm() {
         {plans.length > 0 ? (
           <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {plans
-              .filter(p => p.status === "active" || !p.status)
+              .filter(p => !p.status || p.status.toLowerCase() === "active")
               .map(plan => (
                 <button
                   key={plan.id}
@@ -472,6 +564,24 @@ export default function UserApplicationForm() {
                 onChange={e => setPhone(e.target.value.replace(/\D/g, ""))}
                 className="flex-1 bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-xs font-bold outline-none focus:border-amber-500/60"
                 placeholder="Enter phone number"
+                maxLength={15}
+              />
+            </div>
+          </div>
+
+          {/* Parent / Guardian Phone Number */}
+          <div className="space-y-2">
+            <label className="text-[10px] font-black text-white/30 uppercase tracking-[3px]">Parent / Guardian Mobile Number</label>
+            <div className="flex gap-2">
+              <div className="bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-xs font-bold text-white/50 flex items-center min-w-[80px]">
+                {callingCode}
+              </div>
+              <input
+                type="tel"
+                value={parentPhone}
+                onChange={e => setParentPhone(e.target.value.replace(/\D/g, ""))}
+                className="flex-1 bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-xs font-bold outline-none focus:border-amber-500/60"
+                placeholder="Enter parent or guardian number"
                 maxLength={15}
               />
             </div>

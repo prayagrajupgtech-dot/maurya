@@ -16,6 +16,7 @@ import AdminUsers from "./components/admin/AdminUsers";
 import AdminUserDetails from "./components/admin/AdminUserDetails";
 import AdminPlans from "./components/admin/AdminPlans";
 import AdminCardsList from "./components/admin/AdminCardsList";
+import AdminCreateCard from "./components/admin/AdminCreateCard";
 import AdminActivity from "./components/admin/AdminActivity";
 import AdminSettings from "./components/admin/AdminSettings";
 import AdminApplications from "./components/admin/AdminApplications";
@@ -295,6 +296,7 @@ function AppInner() {
     else if (currentHash === "#/admin/analytics") activeAdminTab = "analytics";
     else if (currentHash === "#/admin/profile") activeAdminTab = "profile";
     else if (currentHash === "#/admin/cards") activeAdminTab = "cards";
+    else if (currentHash === "#/admin/create-card") activeAdminTab = "create-card";
     else if (currentHash === "#/admin/activity") activeAdminTab = "activity";
     else if (currentHash === "#/admin/settings") activeAdminTab = "settings";
 
@@ -351,6 +353,7 @@ function AppInner() {
         {activeAdminTab === "analytics" && <AdminAnalytics />}
         {activeAdminTab === "profile" && <AdminProfile adminEmail="admin@mauryagenerator.com" />}
         {activeAdminTab === "cards" && <AdminCardsList />}
+        {activeAdminTab === "create-card" && <AdminCreateCard />}
         {activeAdminTab === "activity" && <AdminActivity />}
         {activeAdminTab === "settings" && <AdminSettings />}
       </AdminLayout>

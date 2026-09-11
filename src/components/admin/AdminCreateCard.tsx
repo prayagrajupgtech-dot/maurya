@@ -13,6 +13,10 @@ interface UserItem {
 interface PlanItem {
   id: string;
   name: string;
+  price: number;
+  duration_days: number;
+  card_limit: number;
+  status?: string;
 }
 
 export default function AdminCreateCard() {
@@ -66,7 +70,12 @@ export default function AdminCreateCard() {
         const plansData = await plansRes.json();
 
         if (usersRes.ok) setUsers(usersData.users || []);
-        if (plansRes.ok) setPlans(plansData.plans || []);
+        if (plansRes.ok) {
+          const availablePlans = (plansData.plans || []) as PlanItem[];
+          setPlans(availablePlans);
+          const firstActivePlan = availablePlans.find(plan => !plan.status || plan.status === "active");
+          if (firstActivePlan) setSelectedPlanId(firstActivePlan.id);
+        }
       } catch (e) {
         console.error(e);
       } finally {
@@ -102,8 +111,8 @@ export default function AdminCreateCard() {
     setError("");
     setSuccessMessage("");
 
-    if (!email || !name || !phone || !dob || !address) {
-      setError("Email and all card details are required.");
+    if (!email || !name || !dob || !address || !selectedPlanId) {
+      setError("Please select a plan and complete email, name, date of birth, and address.");
       return;
     }
 
@@ -119,7 +128,8 @@ export default function AdminCreateCard() {
           name,
           phone,
           dateOfBirth: dob,
-          address
+          address,
+          photo_url: photo || null
         })
       });
 
@@ -228,8 +238,10 @@ export default function AdminCreateCard() {
     setPhoto("");
     setSignature("");
     setSelectedUserId("");
-    setSelectedPlanId("");
+    setSelectedPlanId(plans.find(plan => !plan.status || plan.status === "active")?.id || "");
   };
+
+  const selectedPlan = plans.find(plan => plan.id === selectedPlanId);
 
   if (loading) {
     return (
@@ -243,7 +255,7 @@ export default function AdminCreateCard() {
     <div className="space-y-8 max-w-4xl">
       <div>
         <h2 className="text-2xl font-black uppercase tracking-tight">Admin Create ID Card</h2>
-        <p className="text-xs text-white/40">Select a user, verify their plan, enter details, and issue an official ID & QR verification record.</p>
+        <p className="text-xs text-white/40">Create an official ID and QR verification record directly, including for people who do not have a mobile number.</p>
       </div>
 
       {/* Success Toast */}
@@ -269,39 +281,62 @@ export default function AdminCreateCard() {
 
       {/* Form Steps */}
       <form onSubmit={handleGenerate} className="bg-white/5 border border-white/10 rounded-[2.5rem] p-8 space-y-6">
-        {/* Step 1: User Selection & Email */}
+        {/* Step 1: Plan Selection — mirrors the user application flow. */}
         <div className="border-b border-white/10 pb-6 space-y-4">
-          <span className="text-[10px] font-black text-amber-500 uppercase tracking-[4px]">Step 1 & 2: Select User & Plan</span>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label className="text-[10px] font-black text-white/30 uppercase tracking-widest block mb-2">Select User (Optional)</label>
-              <select
-                value={selectedUserId}
-                onChange={e => handleSelectUserChange(e.target.value)}
-                className="w-full bg-slate-900 border border-white/10 rounded-xl px-4 py-3 text-xs font-bold outline-none focus:border-amber-500/50 text-white"
-              >
-                <option value="">-- Direct Creation (Enter Email Below) --</option>
-                {users.map(u => (
-                  <option key={u.id} value={u.id}>{u.name} ({u.email}) - {u.planName}</option>
-                ))}
-              </select>
-            </div>
+          <span className="text-[10px] font-black text-amber-500 uppercase tracking-[4px]">Step 1: Select Plan</span>
+          <h3 className="text-xl font-black uppercase tracking-tight">Choose the Card Plan</h3>
 
-            <div>
-              <label className="text-[10px] font-black text-amber-500 uppercase tracking-widest block mb-2">Select/Verify User Plan</label>
-              <select
-                value={selectedPlanId}
-                onChange={e => setSelectedPlanId(e.target.value)}
-                className="w-full bg-slate-900 border border-white/10 rounded-xl px-4 py-3 text-xs font-bold outline-none focus:border-amber-500/50 text-white"
-              >
-                <option value="">-- Default Plan --</option>
-                {plans.map(p => (
-                  <option key={p.id} value={p.id}>{p.name}</option>
-                ))}
-              </select>
+          {selectedPlan && (
+            <div className="bg-amber-500/10 border border-amber-500/20 rounded-2xl p-4 flex items-center justify-between">
+              <div>
+                <p className="text-[10px] font-black text-amber-500 uppercase tracking-widest">Selected Plan</p>
+                <p className="font-black text-white text-lg mt-1">{selectedPlan.name}</p>
+                <p className="text-xs text-white/40">₹{selectedPlan.price} / {selectedPlan.duration_days} days</p>
+              </div>
+              <span className="text-2xl">💎</span>
             </div>
+          )}
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {plans.filter(plan => !plan.status || plan.status === "active").map(plan => (
+              <button
+                type="button"
+                key={plan.id}
+                onClick={() => setSelectedPlanId(plan.id)}
+                className={`text-left p-5 rounded-2xl border-2 transition-all ${
+                  selectedPlanId === plan.id
+                    ? "border-amber-500 bg-amber-500/10"
+                    : "border-white/10 bg-white/5 hover:border-white/20"
+                }`}
+              >
+                <div className="flex items-center justify-between mb-3">
+                  <span className="font-black text-sm uppercase">{plan.name}</span>
+                  {selectedPlanId === plan.id && <span className="text-[10px] font-black bg-amber-500 text-black px-2 py-0.5 rounded-md uppercase">Selected</span>}
+                </div>
+                <p className="text-3xl font-black text-amber-500">₹{plan.price}</p>
+                <div className="mt-3 space-y-1 text-xs text-white/50 font-bold">
+                  <p>{plan.duration_days} days validity</p>
+                  <p>{plan.card_limit === -1 ? "Unlimited" : plan.card_limit} cards</p>
+                </div>
+              </button>
+            ))}
           </div>
+        </div>
 
+        {/* Step 2: Account and personal information */}
+        <div className="space-y-4">
+          <span className="text-[10px] font-black text-amber-500 uppercase tracking-[4px]">Step 2: Personal Information</span>
+          <div>
+            <label className="text-[10px] font-black text-white/30 uppercase tracking-widest block mb-2">Existing User (Optional)</label>
+            <select
+              value={selectedUserId}
+              onChange={e => handleSelectUserChange(e.target.value)}
+              className="w-full bg-slate-900 border border-white/10 rounded-xl px-4 py-3 text-xs font-bold outline-none focus:border-amber-500/50 text-white"
+            >
+              <option value="">-- New / direct card creation --</option>
+              {users.map(u => <option key={u.id} value={u.id}>{u.name} ({u.email}) - {u.planName}</option>)}
+            </select>
+          </div>
           <div>
             <label className="text-[10px] font-black text-amber-500 uppercase tracking-widest block mb-2">User Email Address *</label>
             <input
@@ -316,9 +351,8 @@ export default function AdminCreateCard() {
           </div>
         </div>
 
-        {/* Step 3: Card Details */}
         <div className="space-y-4">
-          <span className="text-[10px] font-black text-white/40 uppercase tracking-[4px]">Step 3: Enter Card Information</span>
+          <span className="text-[10px] font-black text-white/40 uppercase tracking-[4px]">Complete Card Information</span>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
             <div>
@@ -334,13 +368,12 @@ export default function AdminCreateCard() {
             </div>
 
             <div>
-              <label className="text-[10px] font-black text-white/30 uppercase tracking-widest block mb-2">Phone Number</label>
+              <label className="text-[10px] font-black text-white/30 uppercase tracking-widest block mb-2">Phone Number (Optional)</label>
               <input
-                required
                 type="tel"
                 value={phone}
                 onChange={e => setPhone(e.target.value)}
-                placeholder="10-digit mobile number"
+                placeholder="Leave blank if unavailable"
                 className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 font-bold outline-none focus:border-amber-500/50"
               />
             </div>

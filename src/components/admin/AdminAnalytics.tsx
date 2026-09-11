@@ -79,24 +79,24 @@ function ProgressBar({ label, value, total, color = "bg-amber-500", isDark }: {
 
 function SkeletonCard() {
   return (
-    <div className="bg-white/5 border border-white/10 rounded-[2rem] p-5 animate-pulse">
-      <div className="h-3 w-20 bg-white/10 rounded mb-3" />
-      <div className="h-8 w-16 bg-white/10 rounded mb-2" />
-      <div className="h-2 w-24 bg-white/10 rounded" />
+    <div className="bg-gray-100 dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-[2rem] p-5 animate-pulse">
+      <div className="h-3 w-20 bg-gray-200 dark:bg-white/10 rounded mb-3" />
+      <div className="h-8 w-16 bg-gray-200 dark:bg-white/10 rounded mb-2" />
+      <div className="h-2 w-24 bg-gray-200 dark:bg-white/10 rounded" />
     </div>
   );
 }
 
 function SkeletonChart() {
   return (
-    <div className="bg-white/5 border border-white/10 rounded-[2rem] p-6 animate-pulse">
-      <div className="h-4 w-32 bg-white/10 rounded mb-6" />
+    <div className="bg-gray-100 dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-[2rem] p-6 animate-pulse">
+      <div className="h-4 w-32 bg-gray-200 dark:bg-white/10 rounded mb-6" />
       <div className="space-y-4">
         {[1, 2, 3, 4].map((i) => (
           <div key={i} className="flex items-center gap-3">
-            <div className="h-3 w-16 bg-white/10 rounded" />
-            <div className="flex-1 h-6 bg-white/10 rounded-lg" />
-            <div className="h-3 w-10 bg-white/10 rounded" />
+            <div className="h-3 w-16 bg-gray-200 dark:bg-white/10 rounded" />
+            <div className="flex-1 h-6 bg-gray-200 dark:bg-white/10 rounded-lg" />
+            <div className="h-3 w-10 bg-gray-200 dark:bg-white/10 rounded" />
           </div>
         ))}
       </div>
@@ -154,9 +154,9 @@ export default function AdminAnalytics() {
     return (
       <div className="space-y-8">
         <div className="flex flex-wrap items-center gap-4">
-          <div className="h-10 w-40 bg-white/5 rounded-xl animate-pulse" />
-          <div className="h-10 w-32 bg-white/5 rounded-xl animate-pulse" />
-          <div className="h-10 w-36 bg-white/5 rounded-xl animate-pulse" />
+          <div className="h-10 w-40 bg-gray-100 dark:bg-white/5 rounded-xl animate-pulse" />
+          <div className="h-10 w-32 bg-gray-100 dark:bg-white/5 rounded-xl animate-pulse" />
+          <div className="h-10 w-36 bg-gray-100 dark:bg-white/5 rounded-xl animate-pulse" />
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {[1, 2, 3, 4, 5, 6].map((i) => <SkeletonCard key={i} />)}
@@ -172,6 +172,12 @@ export default function AdminAnalytics() {
     return (
       <div className="bg-red-500/10 border border-red-500/20 p-6 rounded-[2rem] text-center">
         <p className="text-sm font-bold text-red-300">{error || "Could not load analytics data."}</p>
+        <button
+          onClick={() => { setLoading(true); setError(""); setStats(null); }}
+          className="mt-4 px-4 py-2 bg-red-500/20 hover:bg-red-500/30 text-red-300 text-xs font-bold rounded-xl transition-colors"
+        >
+          Retry
+        </button>
       </div>
     );
   }
@@ -208,6 +214,8 @@ export default function AdminAnalytics() {
     { icon: "💰", label: "Revenue", value: `₹${totalRevenue.toLocaleString("en-IN")}`, color: "text-amber-400" },
     { icon: "⏳", label: "Pending Payments", value: pendingPayments, color: "text-orange-400" },
   ];
+
+  const hasAnyData = totalUsers > 0 || totalApplications > 0 || totalCards > 0 || totalPayments > 0;
 
   const usersByPlanItems = Object.entries(usersByPlan)
     .filter(([, v]) => v > 0)
@@ -248,36 +256,64 @@ export default function AdminAnalytics() {
           <select
             value={timeRange}
             onChange={(e) => setTimeRange(e.target.value as any)}
-            className={`${card} border px-4 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider ${textMain} focus:outline-none focus:ring-2 focus:ring-amber-500/50`}
+            style={{ colorScheme: isDark ? "dark" : "light" }}
+            className={`${isDark ? "bg-slate-900 border-white/10" : "bg-white border-gray-200"} border px-4 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider ${textMain} focus:outline-none focus:ring-2 focus:ring-amber-500/50`}
           >
             {TIME_RANGES.map((r) => (
-              <option key={r.value} value={r.value}>{r.label}</option>
+              <option
+                key={r.value}
+                value={r.value}
+                className={isDark ? "bg-slate-900 text-white" : "bg-white text-gray-900"}
+                style={{ backgroundColor: isDark ? "#0f172a" : "#ffffff", color: isDark ? "#ffffff" : "#111827" }}
+              >
+                {r.label}
+              </option>
             ))}
           </select>
           <select
             value={selectedYear}
             onChange={(e) => setSelectedYear(Number(e.target.value))}
             disabled={timeRange === "today" || timeRange === "week" || timeRange === "all"}
-            className={`${card} border px-4 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider ${textMain} focus:outline-none focus:ring-2 focus:ring-amber-500/50 disabled:opacity-40 disabled:cursor-not-allowed`}
+            style={{ colorScheme: isDark ? "dark" : "light" }}
+            className={`${isDark ? "bg-slate-900 border-white/10" : "bg-white border-gray-200"} border px-4 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider ${textMain} focus:outline-none focus:ring-2 focus:ring-amber-500/50 disabled:opacity-40 disabled:cursor-not-allowed`}
           >
             {YEARS.map((y) => (
-              <option key={y} value={y}>{y}</option>
+              <option
+                key={y}
+                value={y}
+                className={isDark ? "bg-slate-900 text-white" : "bg-white text-gray-900"}
+                style={{ backgroundColor: isDark ? "#0f172a" : "#ffffff", color: isDark ? "#ffffff" : "#111827" }}
+              >
+                {y}
+              </option>
             ))}
           </select>
           <select
             value={selectedMonth}
             onChange={(e) => setSelectedMonth(Number(e.target.value))}
             disabled={!isMonthMode}
-            className={`${card} border px-4 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider ${textMain} focus:outline-none focus:ring-2 focus:ring-amber-500/50 disabled:opacity-40 disabled:cursor-not-allowed`}
+            style={{ colorScheme: isDark ? "dark" : "light" }}
+            className={`${isDark ? "bg-slate-900 border-white/10" : "bg-white border-gray-200"} border px-4 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider ${textMain} focus:outline-none focus:ring-2 focus:ring-amber-500/50 disabled:opacity-40 disabled:cursor-not-allowed`}
           >
             {MONTHS.map((m, i) => (
-              <option key={i} value={i}>{m}</option>
+              <option
+                key={i}
+                value={i}
+                className={isDark ? "bg-slate-900 text-white" : "bg-white text-gray-900"}
+                style={{ backgroundColor: isDark ? "#0f172a" : "#ffffff", color: isDark ? "#ffffff" : "#111827" }}
+              >
+                {m}
+              </option>
             ))}
           </select>
         </div>
       </div>
 
-      {/* Summary Cards */}
+      {((stats.loading || !hasAnyData) && !filtering) && (
+        <div className="bg-gray-50 dark:bg-gray-900 border border-gray-200/20 rounded-[2rem] p-8 text-center">
+          <p className="text-sm text-gray-300 dark:text-gray-400">No analytics data available for this period</p>
+        </div>
+      )}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         {summaryCards.map((c) => (
           <div key={c.label} className={`${card} border p-5 rounded-[2rem] relative overflow-hidden`}>

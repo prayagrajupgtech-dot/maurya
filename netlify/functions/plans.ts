@@ -6,7 +6,7 @@ export default async (request: Request) => {
 
   try {
     const allPlans = await getAllPlans();
-    const activePlans = allPlans.filter(p => p.status === "active");
+    const activePlans = allPlans.filter(p => !p.status || p.status.toLowerCase() === "active");
     return jsonResponse({ plans: activePlans });
   } catch (error) {
     console.error("plans GET error:", error);

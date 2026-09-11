@@ -121,12 +121,19 @@ export default async (request: Request) => {
       const dateOfBirth = typeof body.dateOfBirth === "string" ? body.dateOfBirth : "";
       const address = typeof body.address === "string" ? body.address.trim() : "";
       const planId = typeof body.planId === "string" ? body.planId : null;
+      const photoUrl = typeof body.photo_url === "string" ? body.photo_url : undefined;
 
       if (!email || !isValidEmail(email)) {
         return jsonResponse({ error: "A valid email address is required." }, 400);
       }
-      if (!name || !phone || !dateOfBirth || !address) {
-        return jsonResponse({ error: "Name, phone, date of birth, and address are required." }, 400);
+      if (!name || !dateOfBirth || !address) {
+        return jsonResponse({ error: "Name, date of birth, and address are required." }, 400);
+      }
+      if (!planId) {
+        return jsonResponse({ error: "Please select a plan before issuing the card." }, 400);
+      }
+      if (!await getPlanById(planId)) {
+        return jsonResponse({ error: "The selected plan could not be found." }, 400);
       }
 
       // Find or create user by email
@@ -143,6 +150,7 @@ export default async (request: Request) => {
         phone,
         date_of_birth: dateOfBirth,
         address,
+        photo_url: photoUrl,
         user_id: userId,
         plan_id: effectivePlanId,
         status: "active",

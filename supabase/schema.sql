@@ -58,6 +58,7 @@ create table if not exists public.card_applications (
   plan_id uuid references public.plans(id) on delete set null,
   full_name text not null default '',
   phone text not null default '',
+  parent_phone text,
   country text default 'India',
   country_code text default '+91',
   date_of_birth date,
@@ -77,6 +78,9 @@ create table if not exists public.card_applications (
 
 create index if not exists card_applications_user_idx on public.card_applications(user_id);
 create index if not exists card_applications_status_idx on public.card_applications(status);
+
+-- Supports existing installations that already created card_applications.
+alter table public.card_applications add column if not exists parent_phone text;
 
 alter table public.card_applications enable row level security;
 revoke all on public.card_applications from anon, authenticated;
