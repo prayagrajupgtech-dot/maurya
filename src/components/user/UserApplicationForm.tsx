@@ -71,7 +71,7 @@ export default function UserApplicationForm() {
       setLoading(true);
       try {
         const [plansRes, appsRes] = await Promise.all([
-          fetch("/api/admin-plans"),
+          fetch("/api/plans"),
           fetch("/api/user-applications", { headers: getAuthHeaders() })
         ]);
 
