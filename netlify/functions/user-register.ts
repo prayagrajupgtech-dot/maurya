@@ -26,8 +26,18 @@ export default async (request: Request) => {
       return jsonResponse({ error: "Please enter a valid email address." }, 400);
     }
 
-    if (!password || password.length < 6) {
-      return jsonResponse({ error: "Password must be at least 6 characters." }, 400);
+    if (!password || password.length < 8) {
+      return jsonResponse({ error: "Password must be at least 8 characters." }, 400);
+    }
+
+    // Strong password validation
+    const passwordErrors: string[] = [];
+    if (!/[A-Z]/.test(password)) passwordErrors.push("uppercase letter");
+    if (!/[a-z]/.test(password)) passwordErrors.push("lowercase letter");
+    if (!/[0-9]/.test(password)) passwordErrors.push("number");
+    if (!/[!@#$%^&*()_+\-=\[\]{}|;':",./<>?]/.test(password)) passwordErrors.push("special character");
+    if (passwordErrors.length > 0) {
+      return jsonResponse({ error: `Password must contain at least 1 ${passwordErrors.join(", ")}.` }, 400);
     }
 
     if (!display_name) {

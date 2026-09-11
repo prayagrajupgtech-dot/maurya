@@ -1,5 +1,6 @@
 import { FormEvent, useState } from "react";
 import { countries } from "../utils/countries";
+import PasswordStrength, { validatePassword } from "./PasswordStrength";
 
 export default function UserRegister() {
   const [displayName, setDisplayName] = useState("");
@@ -32,8 +33,9 @@ export default function UserRegister() {
       return;
     }
 
-    if (password.length < 6) {
-      setError("Password must be at least 6 characters.");
+    const passwordCheck = validatePassword(password);
+    if (!passwordCheck.valid) {
+      setError(`Password requirements: ${passwordCheck.errors.join(", ")}`);
       return;
     }
 
@@ -42,8 +44,8 @@ export default function UserRegister() {
       return;
     }
 
-    if (!/^\d{10}$/.test(phone)) {
-      setError("Mobile number must be exactly 10 digits.");
+    if (!/^\d{10}$/.test(phone.replace(/\D/g, "").slice(-10))) {
+      setError("Mobile number must be at least 10 digits.");
       return;
     }
 
@@ -211,9 +213,10 @@ export default function UserRegister() {
                 type="password"
                 value={password}
                 onChange={e => setPassword(e.target.value)}
-                placeholder="Min 6 characters..."
+                placeholder="Min 8 characters..."
                 className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-xs font-bold outline-none focus:border-amber-500/60"
               />
+              <PasswordStrength password={password} />
             </div>
 
             <div>

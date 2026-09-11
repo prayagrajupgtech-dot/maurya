@@ -6,6 +6,13 @@ import {
 } from "./_shared/admin-auth.js";
 import { jsonResponse, readJsonBody } from "./_shared/http.js";
 
+export async function verifyAdminSession(request: Request) {
+  if (await isAdminRequest(request)) {
+    return { authenticated: true };
+  }
+  return null;
+}
+
 export default async (request: Request) => {
   try {
     if (request.method === "GET") {

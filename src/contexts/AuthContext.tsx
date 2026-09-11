@@ -83,6 +83,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Google sign in failed.");
+      if (data.token) {
+        localStorage.setItem("maurya_user_token", data.token);
+      }
       setCustomUser(data.user);
       window.location.hash = "#/home";
     } catch (err) {
@@ -129,6 +132,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (data.requiresPasswordSetup) {
       return { requiresPasswordSetup: true, userId: data.userId, email: data.email, message: data.message };
     }
+    if (data.token) {
+      localStorage.setItem("maurya_user_token", data.token);
+    }
     setCustomUser(data.user);
     return data;
   };
@@ -141,6 +147,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || "Mobile sign in failed.");
+    if (data.token) {
+      localStorage.setItem("maurya_user_token", data.token);
+    }
     setCustomUser(data.user);
     return data;
   };
@@ -163,6 +172,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (window.google?.accounts?.id) {
       window.google.accounts.id.disableAutoSelect();
     }
+    localStorage.removeItem("maurya_user_token");
     setSession(null);
     setCustomUser(null);
   };

@@ -21,6 +21,8 @@ import AdminSettings from "./components/admin/AdminSettings";
 import AdminApplications from "./components/admin/AdminApplications";
 import AdminApplicationDetails from "./components/admin/AdminApplicationDetails";
 import AdminNotifications from "./components/admin/AdminNotifications";
+import AdminAnalytics from "./components/admin/AdminAnalytics";
+import AdminProfile from "./components/admin/AdminProfile";
 
 // User Panel Components
 import UserNavigation from "./components/user/UserNavigation";
@@ -88,10 +90,11 @@ function AppInner() {
 
   // User Dashboard / Plan Data State
   const [userData, setUserData] = useState<{
-    profile: { id: string; email: string; display_name?: string; status?: string; country?: string; country_code?: string; phone?: string } | null;
+    profile: { id: string; email: string; display_name?: string; status?: string; country?: string; country_code?: string; phone?: string; created_at?: string } | null;
     plan: { name: string; price: number; duration_days: number; card_limit: number } | null;
     cards: Array<any>;
-  }>({ profile: null, plan: null, cards: [] });
+    application: { id: string; status: string; completion_percentage: number; plan_id: string | null; submitted_at: string | null } | null;
+  }>({ profile: null, plan: null, cards: [], application: null });
 
   const [userTab, setUserTab] = useState<"home" | "my-card" | "apply" | "plans" | "profile">("home");
   const [userBlockedMessage, setUserBlockedMessage] = useState("");
@@ -289,6 +292,8 @@ function AppInner() {
     else if (currentHash === "#/admin/applications") activeAdminTab = "applications";
     else if (currentHash.startsWith("#/admin/applications/")) activeAdminTab = "application-details";
     else if (currentHash === "#/admin/notifications") activeAdminTab = "notifications";
+    else if (currentHash === "#/admin/analytics") activeAdminTab = "analytics";
+    else if (currentHash === "#/admin/profile") activeAdminTab = "profile";
     else if (currentHash === "#/admin/cards") activeAdminTab = "cards";
     else if (currentHash === "#/admin/activity") activeAdminTab = "activity";
     else if (currentHash === "#/admin/settings") activeAdminTab = "settings";
@@ -343,6 +348,8 @@ function AppInner() {
           />
         )}
         {activeAdminTab === "notifications" && <AdminNotifications />}
+        {activeAdminTab === "analytics" && <AdminAnalytics />}
+        {activeAdminTab === "profile" && <AdminProfile adminEmail="admin@mauryagenerator.com" />}
         {activeAdminTab === "cards" && <AdminCardsList />}
         {activeAdminTab === "activity" && <AdminActivity />}
         {activeAdminTab === "settings" && <AdminSettings />}
@@ -424,25 +431,50 @@ function AppInner() {
                     </p>
                   </div>
                 </div>
+              ) : userData.application ? (
+                <div className="space-y-4">
+                  <div className={`${theme === "dark" ? "bg-black/30 border-white/10" : "bg-gray-100 border-gray-200"} border px-6 py-4 rounded-2xl inline-block`}>
+                    <p className={`text-[10px] font-black ${theme === "dark" ? "text-white/30" : "text-gray-400"} uppercase tracking-widest`}>Application</p>
+                    <div className="mt-2">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className={`text-xs font-black uppercase px-3 py-1 rounded-lg ${
+                          userData.application.status === "submitted" ? "bg-blue-500/10 text-blue-400" :
+                          userData.application.status === "card_issued" ? "bg-emerald-500/10 text-emerald-400" :
+                          userData.application.status === "payment_pending" ? "bg-amber-500/10 text-amber-400" :
+                          "bg-white/5 text-white/50"
+                        }`}>
+                          {userData.application.status}
+                        </span>
+                      </div>
+                      <p className={`text-sm font-bold ${theme === "dark" ? "text-white/60" : "text-gray-500"} mt-1`}>
+                        {userData.application.completion_percentage}% Complete
+                      </p>
+                    </div>
+                  </div>
+
+                  {userData.application.status !== "submitted" && userData.application.status !== "card_issued" && (
+                    <div className={`${theme === "dark" ? "bg-black/30 border-white/10" : "bg-gray-100 border-gray-200"} border px-8 py-6 rounded-2xl max-w-md mx-auto space-y-3`}>
+                      <p className={`text-sm ${theme === "dark" ? "text-white/50" : "text-gray-500"}`}>
+                        {userData.application.completion_percentage === 100
+                          ? "Your application is complete. Submit it to proceed."
+                          : "Continue filling out your card application."}
+                      </p>
+                    </div>
+                  )}
+                </div>
               ) : (
                 <div className={`${theme === "dark" ? "bg-black/30 border-white/10" : "bg-gray-100 border-gray-200"} border px-8 py-6 rounded-2xl max-w-md mx-auto space-y-3`}>
                   <p className={`text-sm ${theme === "dark" ? "text-white/50" : "text-gray-500"}`}>
                     No card issued yet. Create your card application to get started.
                   </p>
-                  <button
-                    onClick={() => setUserTab("apply")}
-                    className="bg-amber-500 text-black px-6 py-2.5 rounded-xl font-black uppercase text-xs tracking-widest hover:bg-amber-400 transition-all"
-                  >
-                    Create ID Card
-                  </button>
                 </div>
               )}
 
               <button
-                onClick={() => setUserTab("my-card")}
+                onClick={() => setUserTab(userData.cards.length > 0 ? "my-card" : "apply")}
                 className="bg-amber-500 text-black px-8 py-4 rounded-2xl font-black uppercase text-xs tracking-widest hover:bg-amber-400 transition-all shadow-xl shadow-amber-500/20"
               >
-                {userData.cards.length > 0 ? "View My Card" : "Check Card Status"}
+                {userData.cards.length > 0 ? "View My Card" : userData.application?.status === "submitted" ? "Check Application Status" : "Create ID Card"}
               </button>
             </div>
           </div>

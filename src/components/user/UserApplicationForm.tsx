@@ -7,6 +7,7 @@ interface Plan {
   price: number;
   duration_days: number;
   card_limit: number;
+  features?: string[];
   status: string;
 }
 
@@ -45,7 +46,6 @@ export default function UserApplicationForm() {
 
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
-  const [showPaymentModal, setShowPaymentModal] = useState(false);
 
   const getAuthHeaders = () => {
     const token = localStorage.getItem("maurya_user_token") || "";
@@ -108,36 +108,20 @@ export default function UserApplicationForm() {
     init();
   }, []);
 
-  // Progress calculation
+  // Progress calculation - MUST match backend weights
   const calculateProgress = (): number => {
-    const fields = [
-      { value: fullName, weight: 15 },
-      { value: phone, weight: 15 },
-      { value: country, weight: 10 },
-      { value: dateOfBirth, weight: 15 },
-      { value: address, weight: 15 },
-      { value: email, weight: 10 },
-      { value: selectedPlanId, weight: 10 },
-      { value: photo, weight: 10 },
-    ];
     let total = 0;
-    for (const f of fields) {
-      if (f.value && f.value.trim() !== "") total += f.weight;
-    }
-    return total;
+    if (fullName.trim()) total += 15;
+    if (phone.trim()) total += 15;
+    if (country.trim()) total += 10;
+    if (dateOfBirth.trim()) total += 15;
+    if (address.trim()) total += 15;
+    if (selectedPlanId) total += 10;
+    if (photo) total += 10;
+    return Math.min(total, 100);
   };
 
   const progress = calculateProgress();
-
-  const getStatusLabel = (): string => {
-    if (application?.status === "card_issued") return "Card Issued";
-    if (application?.status === "payment_success") return "Payment Success";
-    if (application?.status === "payment_pending") return "Payment Pending";
-    if (application?.status === "submitted") return "Submitted";
-    if (progress === 100) return "Completed";
-    if (progress >= 50) return "Incomplete";
-    return "Draft";
-  };
 
   const getMissingFields = (): string[] => {
     const missing: string[] = [];
@@ -146,16 +130,41 @@ export default function UserApplicationForm() {
     if (!country.trim()) missing.push("Country");
     if (!dateOfBirth.trim()) missing.push("Date of Birth");
     if (!address.trim()) missing.push("Address");
-    if (!email.trim()) missing.push("Email");
     if (!selectedPlanId) missing.push("Plan Selection");
     if (!photo) missing.push("Photo");
     return missing;
+  };
+
+  const isComplete = progress === 100;
+
+  const getStatusLabel = (): string => {
+    if (application?.status === "card_issued") return "Card Issued";
+    if (application?.status === "payment_success") return "Payment Success";
+    if (application?.status === "payment_pending") return "Payment Pending";
+    if (application?.status === "submitted") return "Submitted";
+    if (isComplete) return "Completed";
+    if (progress >= 50) return "Incomplete";
+    return "Draft";
+  };
+
+  const getStatusColor = (): string => {
+    if (application?.status === "card_issued") return "bg-emerald-500/10 text-emerald-400";
+    if (application?.status === "payment_success") return "bg-emerald-500/10 text-emerald-400";
+    if (application?.status === "payment_pending") return "bg-amber-500/10 text-amber-400";
+    if (application?.status === "submitted") return "bg-blue-500/10 text-blue-400";
+    if (isComplete) return "bg-emerald-500/10 text-emerald-400";
+    if (progress >= 50) return "bg-amber-500/10 text-amber-400";
+    return "bg-white/5 text-white/50";
   };
 
   const handlePhotoUpload = (file?: File) => {
     if (!file) return;
     if (file.size > 5 * 1024 * 1024) {
       setError("Photo must be under 5MB.");
+      return;
+    }
+    if (!file.type.match(/^image\/(png|jpeg|webp)$/)) {
+      setError("Photo must be PNG, JPG, or WebP.");
       return;
     }
     const reader = new FileReader();
@@ -185,8 +194,6 @@ export default function UserApplicationForm() {
           const verifyData = await verifyRes.json();
           if (verifyRes.ok) {
             setSuccess("Payment successful! Your card has been issued.");
-            setShowPaymentModal(false);
-            // Refresh application data
             const appsRes = await fetch("/api/user-applications", { headers: getAuthHeaders() });
             if (appsRes.ok) {
               const appsData = await appsRes.json();
@@ -202,6 +209,11 @@ export default function UserApplicationForm() {
       },
       prefill: { contact: phone, email },
       theme: { color: "#f59e0b" },
+      modal: {
+        ondismiss: () => {
+          setError("Payment was cancelled. You can try again when ready.");
+        }
+      }
     };
     const rzp = new (window as any).Razorpay(options);
     rzp.on("payment.failed", () => setError("Payment failed. Please try again."));
@@ -239,7 +251,7 @@ export default function UserApplicationForm() {
         setError(data.error || "Failed to save.");
       }
     } catch {
-      setError("Network error.");
+      setError("Network error saving draft.");
     } finally {
       setSaving(false);
     }
@@ -248,7 +260,7 @@ export default function UserApplicationForm() {
   const handleSubmitApplication = async () => {
     const missing = getMissingFields();
     if (missing.length > 0) {
-      setError(`Please fill all fields. Missing: ${missing.join(", ")}`);
+      setError(`Please complete all required fields: ${missing.join(", ")}`);
       return;
     }
     setSubmitting(true);
@@ -282,7 +294,7 @@ export default function UserApplicationForm() {
         setError(data.error || "Failed to submit.");
       }
     } catch {
-      setError("Network error.");
+      setError("Network error submitting application.");
     } finally {
       setSubmitting(false);
     }
@@ -312,10 +324,13 @@ export default function UserApplicationForm() {
     }
   };
 
-  const isIssueEnabled =
-    application?.status === "submitted" ||
-    application?.status === "completed" ||
-    (progress === 100 && application?.status !== "card_issued");
+  // Issue card is enabled when: submitted OR completed OR 100% complete, AND not already issued
+  const canIssueCard =
+    (application?.status === "submitted" || application?.status === "completed" || (isComplete && application?.status !== "card_issued")) &&
+    application?.status !== "card_issued" &&
+    application?.status !== "payment_pending";
+
+  const selectedPlan = plans.find(p => p.id === selectedPlanId);
 
   if (loading) {
     return (
@@ -346,6 +361,17 @@ export default function UserApplicationForm() {
       <div className="border border-white/10 bg-white/5 rounded-[2.5rem] p-8">
         <span className="text-[10px] font-black text-amber-500 uppercase tracking-[5px]">Step 1</span>
         <h2 className="mt-2 text-2xl font-black uppercase tracking-tight">Select Your Plan</h2>
+
+        {selectedPlan && (
+          <div className="mt-4 bg-amber-500/10 border border-amber-500/20 rounded-2xl p-4 flex items-center justify-between">
+            <div>
+              <p className="text-[10px] font-black text-amber-500 uppercase tracking-widest">Selected Plan</p>
+              <p className="font-black text-white text-lg mt-1">{selectedPlan.name}</p>
+              <p className="text-xs text-white/40">₹{selectedPlan.price} / {selectedPlan.duration_days} days</p>
+            </div>
+            <span className="text-2xl">💎</span>
+          </div>
+        )}
 
         {plans.length > 0 ? (
           <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -384,7 +410,7 @@ export default function UserApplicationForm() {
               ))}
           </div>
         ) : (
-          <p className="mt-6 text-sm text-white/40">No plans available.</p>
+          <p className="mt-6 text-sm text-white/40">No plans available. Please contact administrator.</p>
         )}
       </div>
 
@@ -396,7 +422,7 @@ export default function UserApplicationForm() {
         <div className="mt-6 space-y-5">
           {/* Full Name */}
           <div className="space-y-2">
-            <label className="text-[10px] font-black text-white/30 uppercase tracking-[3px]">Full Name</label>
+            <label className="text-[10px] font-black text-white/30 uppercase tracking-[3px]">Full Name *</label>
             <input
               value={fullName}
               onChange={e => setFullName(e.target.value)}
@@ -419,7 +445,7 @@ export default function UserApplicationForm() {
 
           {/* Country */}
           <div className="space-y-2">
-            <label className="text-[10px] font-black text-white/30 uppercase tracking-[3px]">Country</label>
+            <label className="text-[10px] font-black text-white/30 uppercase tracking-[3px]">Country *</label>
             <select
               value={country}
               onChange={e => setCountry(e.target.value)}
@@ -435,7 +461,7 @@ export default function UserApplicationForm() {
 
           {/* Phone Number */}
           <div className="space-y-2">
-            <label className="text-[10px] font-black text-white/30 uppercase tracking-[3px]">Mobile Number</label>
+            <label className="text-[10px] font-black text-white/30 uppercase tracking-[3px]">Mobile Number *</label>
             <div className="flex gap-2">
               <div className="bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-xs font-bold text-white/50 flex items-center min-w-[80px]">
                 {callingCode}
@@ -453,7 +479,7 @@ export default function UserApplicationForm() {
 
           {/* Date of Birth */}
           <div className="space-y-2">
-            <label className="text-[10px] font-black text-white/30 uppercase tracking-[3px]">Date of Birth</label>
+            <label className="text-[10px] font-black text-white/30 uppercase tracking-[3px]">Date of Birth *</label>
             <input
               type="date"
               value={dateOfBirth}
@@ -465,7 +491,7 @@ export default function UserApplicationForm() {
 
           {/* Address */}
           <div className="space-y-2">
-            <label className="text-[10px] font-black text-white/30 uppercase tracking-[3px]">Address</label>
+            <label className="text-[10px] font-black text-white/30 uppercase tracking-[3px]">Address *</label>
             <textarea
               value={address}
               onChange={e => setAddress(e.target.value)}
@@ -476,7 +502,7 @@ export default function UserApplicationForm() {
 
           {/* Photo Upload */}
           <div className="space-y-2">
-            <label className="text-[10px] font-black text-white/30 uppercase tracking-[3px]">Photo</label>
+            <label className="text-[10px] font-black text-white/30 uppercase tracking-[3px]">Photo *</label>
             <div className="p-6 border-2 border-dashed border-white/10 rounded-2xl flex flex-col sm:flex-row items-center text-center sm:text-left gap-5 hover:bg-white/5 transition-all">
               <div className="w-24 h-32 bg-white/5 rounded-xl border border-white/10 overflow-hidden flex items-center justify-center shrink-0">
                 {photo ? (
@@ -490,15 +516,26 @@ export default function UserApplicationForm() {
               <div>
                 <p className="font-black text-sm">Upload Photo</p>
                 <p className="text-xs text-white/30 font-bold mt-1">JPG, PNG, or WebP. Max 5MB.</p>
-                <label className="cursor-pointer mt-3 inline-block bg-white text-black text-[10px] font-black uppercase tracking-[3px] px-5 py-2.5 rounded-xl hover:scale-105 active:scale-95 transition-all">
-                  Select Photo
-                  <input
-                    type="file"
-                    accept="image/png,image/jpeg,image/webp"
-                    onChange={e => handlePhotoUpload(e.target.files?.[0])}
-                    className="hidden"
-                  />
-                </label>
+                <div className="flex gap-2 mt-3">
+                  <label className="cursor-pointer inline-block bg-white text-black text-[10px] font-black uppercase tracking-[3px] px-5 py-2.5 rounded-xl hover:scale-105 active:scale-95 transition-all">
+                    Select Photo
+                    <input
+                      type="file"
+                      accept="image/png,image/jpeg,image/webp"
+                      onChange={e => handlePhotoUpload(e.target.files?.[0])}
+                      className="hidden"
+                    />
+                  </label>
+                  {photo && (
+                    <button
+                      type="button"
+                      onClick={() => setPhoto("")}
+                      className="bg-red-500/10 text-red-400 text-[10px] font-black uppercase tracking-[3px] px-4 py-2.5 rounded-xl hover:bg-red-500/20 transition-all"
+                    >
+                      Remove
+                    </button>
+                  )}
+                </div>
               </div>
             </div>
           </div>
@@ -519,7 +556,7 @@ export default function UserApplicationForm() {
             </div>
             <div className="w-full h-3 bg-white/5 rounded-full overflow-hidden">
               <div
-                className="h-full bg-amber-500 rounded-full transition-all duration-500"
+                className={`h-full rounded-full transition-all duration-500 ${isComplete ? "bg-emerald-500" : "bg-amber-500"}`}
                 style={{ width: `${progress}%` }}
               />
             </div>
@@ -528,23 +565,13 @@ export default function UserApplicationForm() {
           {/* Status badge */}
           <div className="flex items-center gap-2">
             <span className="text-[10px] font-black text-white/30 uppercase tracking-[3px]">Status:</span>
-            <span
-              className={`text-xs font-black uppercase px-3 py-1 rounded-lg ${
-                progress === 100
-                  ? "bg-emerald-500/10 text-emerald-400"
-                  : application?.status === "submitted"
-                  ? "bg-blue-500/10 text-blue-400"
-                  : application?.status === "card_issued"
-                  ? "bg-amber-500/10 text-amber-400"
-                  : "bg-white/5 text-white/50"
-              }`}
-            >
+            <span className={`text-xs font-black uppercase px-3 py-1 rounded-lg ${getStatusColor()}`}>
               {getStatusLabel()}
             </span>
           </div>
 
           {/* Missing fields */}
-          {progress < 100 && (
+          {!isComplete && (
             <div className="bg-white/5 border border-white/10 rounded-xl p-4">
               <p className="text-[10px] font-black text-white/30 uppercase tracking-[3px] mb-2">Missing Fields</p>
               <div className="flex flex-wrap gap-2">
@@ -557,6 +584,15 @@ export default function UserApplicationForm() {
                   </span>
                 ))}
               </div>
+            </div>
+          )}
+
+          {/* Selected Plan Summary */}
+          {selectedPlan && (
+            <div className="bg-amber-500/5 border border-amber-500/10 rounded-xl p-4">
+              <p className="text-[10px] font-black text-amber-500 uppercase tracking-[3px] mb-1">Selected Plan</p>
+              <p className="font-black text-white">{selectedPlan.name} — ₹{selectedPlan.price}</p>
+              <p className="text-xs text-white/40">{selectedPlan.duration_days} days validity</p>
             </div>
           )}
         </div>
@@ -574,49 +610,20 @@ export default function UserApplicationForm() {
 
         <button
           onClick={handleSubmitApplication}
-          disabled={submitting || progress < 100}
+          disabled={submitting || !isComplete || application?.status === "submitted" || application?.status === "card_issued"}
           className="flex-1 bg-white/10 text-white border border-white/10 py-3.5 rounded-xl font-black uppercase text-xs tracking-widest hover:bg-white/15 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          {submitting ? "SUBMITTING..." : "SUBMIT APPLICATION"}
+          {submitting ? "SUBMITTING..." : application?.status === "submitted" ? "ALREADY SUBMITTED" : "SUBMIT APPLICATION"}
         </button>
 
         <button
           onClick={handleIssueCard}
-          disabled={issuing || !isIssueEnabled}
+          disabled={issuing || !canIssueCard}
           className="flex-1 bg-amber-500 text-black py-3.5 rounded-xl font-black uppercase text-xs tracking-widest hover:bg-amber-400 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-amber-500/20"
         >
-          {issuing ? "PROCESSING..." : "ISSUE CARD"}
+          {issuing ? "PROCESSING..." : application?.status === "card_issued" ? "CARD ISSUED" : "ISSUE CARD"}
         </button>
       </div>
-
-      {/* Payment Modal */}
-      {showPaymentModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
-          <div className="bg-[#0a0f1e] border border-white/10 rounded-[2rem] p-8 max-w-md w-full space-y-5">
-            <h3 className="text-xl font-black uppercase">Confirm Payment</h3>
-            <p className="text-sm text-white/50">
-              You will be redirected to Razorpay to complete the payment for card issuance.
-            </p>
-            <div className="flex gap-3">
-              <button
-                onClick={() => setShowPaymentModal(false)}
-                className="flex-1 bg-white/10 text-white py-3 rounded-xl font-black uppercase text-xs tracking-widest"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={() => {
-                  setShowPaymentModal(false);
-                  handleIssueCard();
-                }}
-                className="flex-1 bg-amber-500 text-black py-3 rounded-xl font-black uppercase text-xs tracking-widest"
-              >
-                Pay Now
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

@@ -32,7 +32,7 @@ export default async (request: Request) => {
       const supabase = getSupabaseAdmin();
       const { data: profile } = await supabase
         .from("user_profiles")
-        .select("id, email, display_name, phone, status, plan_id")
+        .select("id, email, display_name, phone, status, plan_id, country, country_code, created_at")
         .eq("id", authUser.userId)
         .single();
 
@@ -42,20 +42,33 @@ export default async (request: Request) => {
 
       const { data: cards } = await supabase
         .from("id_cards")
-        .select("id, card_number, name, phone, status, created_at")
+        .select("id, card_number, name, phone, status, created_at, qr_token, issued_at, expires_at, photo_url, plan_id")
         .eq("user_id", authUser.userId)
         .order("created_at", { ascending: false });
+
+      // Get active application if any
+      const { data: apps } = await supabase
+        .from("card_applications")
+        .select("id, status, completion_percentage, plan_id, submitted_at")
+        .eq("user_id", authUser.userId)
+        .order("created_at", { ascending: false })
+        .limit(1);
 
       return jsonResponse({
         profile: {
           id: profile?.id || authUser.userId,
           email: profile?.email || authUser.email || "",
           display_name: profile?.display_name || authUser.email?.split("@")[0] || "User",
+          phone: profile?.phone || "",
+          country: profile?.country || "",
+          country_code: profile?.country_code || "",
           status: profile?.status || userRecord?.status || "active",
-          role: "user"
+          role: "user",
+          created_at: profile?.created_at || null
         },
         plan: planRecord,
-        cards: cards || []
+        cards: cards || [],
+        application: apps && apps.length > 0 ? apps[0] : null
       });
     }
 

@@ -54,6 +54,7 @@ export default async (request: Request) => {
       const address = typeof body.address === "string" ? body.address.trim() : "";
       const email = typeof body.email === "string" ? body.email.trim().toLowerCase() : "";
       const photoUrl = typeof body.photo_url === "string" ? body.photo_url.trim() : null;
+      const requestedStatus = typeof body.status === "string" ? body.status.trim() : null;
 
       if (id) {
         const existing = await getApplicationById(id);
@@ -62,19 +63,24 @@ export default async (request: Request) => {
         }
       }
 
+      // Progress calculation - weights MUST match frontend
       let completionPercentage = 0;
-      if (fullName) completionPercentage += 10;
-      if (phone) completionPercentage += 10;
+      if (fullName) completionPercentage += 15;
+      if (phone) completionPercentage += 15;
       if (country) completionPercentage += 10;
       if (dateOfBirth) completionPercentage += 15;
       if (address) completionPercentage += 15;
       if (email) completionPercentage += 10;
       if (planId) completionPercentage += 10;
-      if (countryCode) completionPercentage += 5;
-      if (photoUrl) completionPercentage += 15;
+      if (photoUrl) completionPercentage += 10;
 
-      let status: "draft" | "incomplete" | "completed" = "draft";
-      if (completionPercentage === 100) {
+      // Determine status - respect user's explicit status request when valid
+      let status: CardApplicationRecord["status"] = "draft";
+      if (requestedStatus === "submitted" && completionPercentage === 100) {
+        status = "submitted";
+      } else if (requestedStatus === "cancelled") {
+        status = "cancelled";
+      } else if (completionPercentage === 100) {
         status = "completed";
       } else if (completionPercentage >= 50) {
         status = "incomplete";
@@ -96,11 +102,21 @@ export default async (request: Request) => {
         status
       });
 
-      if (completionPercentage === 100) {
+      if (requestedStatus === "submitted" && completionPercentage === 100) {
         await saveNotification({
           type: "application_submitted",
           title: "Application Submitted",
-          message: `Application ${application.id} has been submitted for review.`,
+          message: `${fullName || "User"} has submitted their card application.`,
+          related_user_id: authUser.userId,
+          related_application_id: application.id,
+          read: false
+        });
+      } else if (completionPercentage === 100 && !requestedStatus) {
+        // First time reaching 100% without explicit submit
+        await saveNotification({
+          type: "application_started",
+          title: "Application Completed",
+          message: `${fullName || "User"} has completed their application form.`,
           related_user_id: authUser.userId,
           related_application_id: application.id,
           read: false
@@ -154,4 +170,8 @@ export default async (request: Request) => {
   }
 
   return jsonResponse({ error: "Method not allowed." }, 405);
+};
+
+type CardApplicationRecord = {
+  status: "draft" | "incomplete" | "completed" | "submitted" | "payment_pending" | "payment_success" | "payment_failed" | "card_issued" | "card_active" | "card_suspended" | "cancelled";
 };

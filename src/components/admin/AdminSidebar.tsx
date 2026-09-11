@@ -20,11 +20,13 @@ export default function AdminSidebar({ currentTab, onNavigate, onLogout }: Admin
 
   const navItems = [
     { id: "dashboard", label: "Dashboard", icon: "📊" },
+    { id: "analytics", label: "Analysis", icon: "📈" },
     { id: "users", label: "Users", icon: "👥" },
     { id: "applications", label: "Applications", icon: "📝" },
     { id: "plans", label: "Plans", icon: "💎" },
     { id: "cards", label: "Cards / Generated", icon: "🪪" },
     { id: "notifications", label: "Notifications", icon: "🔔", badge: unreadCount },
+    { id: "profile", label: "Profile", icon: "👤" },
     { id: "activity", label: "Activity / Logs", icon: "📜" },
     { id: "settings", label: "Settings", icon: "⚙️" },
   ];
