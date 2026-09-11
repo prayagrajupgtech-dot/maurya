@@ -48,7 +48,7 @@ export default function AdminSidebar({ currentTab, onNavigate, onLogout }: Admin
 
         <nav className="space-y-1">
           {navItems.map(item => {
-            const isActive = currentTab === item.id || (item.id === "users" && currentTab.startsWith("users/")) || (item.id === "applications" && currentTab.startsWith("applications/"));
+            const isActive = currentTab === item.id || (item.id === "users" && (currentTab === "user-details" || currentTab.startsWith("users/"))) || (item.id === "applications" && (currentTab === "application-details" || currentTab.startsWith("applications/")));
             return (
               <button
                 key={item.id}

@@ -155,8 +155,8 @@ function AppInner() {
         return;
       }
 
-      // Check Admin route session
-      if (hash.startsWith("#/admin")) {
+      // Check Admin route session — only when not already authenticated
+      if (hash.startsWith("#/admin") && adminSession !== "authenticated") {
         setAdminSession("checking");
         try {
           const response = await fetch("/api/admin-session");
