@@ -1,8 +1,9 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, createContext, useContext, ReactNode } from "react";
 
 // Auth & Components
 import AdminLogin from "./components/AdminLogin";
 import UserLogin from "./components/UserLogin";
+import UserRegister from "./components/UserRegister";
 import LoginSelectionPage from "./components/auth/LoginSelectionPage";
 import PersonDetailView from "./components/PersonDetailView";
 import SetupPasswordPage from "./components/SetupPasswordPage";
@@ -14,15 +15,38 @@ import AdminDashboard from "./components/admin/AdminDashboard";
 import AdminUsers from "./components/admin/AdminUsers";
 import AdminUserDetails from "./components/admin/AdminUserDetails";
 import AdminPlans from "./components/admin/AdminPlans";
-import AdminCreateCard from "./components/admin/AdminCreateCard";
 import AdminCardsList from "./components/admin/AdminCardsList";
 import AdminActivity from "./components/admin/AdminActivity";
 import AdminSettings from "./components/admin/AdminSettings";
+import AdminApplications from "./components/admin/AdminApplications";
+import AdminApplicationDetails from "./components/admin/AdminApplicationDetails";
+import AdminNotifications from "./components/admin/AdminNotifications";
 
 // User Panel Components
 import UserNavigation from "./components/user/UserNavigation";
 import UserMyCardPage from "./components/user/UserMyCardPage";
 import UserProfilePage from "./components/user/UserProfilePage";
+import UserApplicationForm from "./components/user/UserApplicationForm";
+
+// Theme Context
+type Theme = "dark" | "light";
+interface ThemeContextValue { theme: Theme; toggleTheme: () => void; }
+const ThemeContext = createContext<ThemeContextValue>({ theme: "dark", toggleTheme: () => {} });
+export function useTheme() { return useContext(ThemeContext); }
+
+function ThemeProvider({ children }: { children: ReactNode }) {
+  const [theme, setTheme] = useState<Theme>(() => (localStorage.getItem("maurya_theme") as Theme) || "dark");
+  const toggleTheme = () => {
+    const next = theme === "dark" ? "light" : "dark";
+    setTheme(next);
+    localStorage.setItem("maurya_theme", next);
+  };
+  useEffect(() => {
+    document.documentElement.classList.toggle("dark", theme === "dark");
+    document.documentElement.classList.toggle("light", theme === "light");
+  }, [theme]);
+  return <ThemeContext.Provider value={{ theme, toggleTheme }}>{children}</ThemeContext.Provider>;
+}
 
 interface VerificationData {
   databaseVerified: boolean;
@@ -48,8 +72,9 @@ function decodeData(encoded: string): any {
   }
 }
 
-export default function App() {
+function AppInner() {
   const { session: userSession, user: currentUser, signOut } = useAuth();
+  const { theme } = useTheme();
 
   // Routing State
   const [currentHash, setCurrentHash] = useState(window.location.hash || "#/");
@@ -59,15 +84,16 @@ export default function App() {
   // Admin Auth State
   const [adminSession, setAdminSession] = useState<"checking" | "authenticated" | "unauthenticated">("checking");
   const [selectedAdminUserId, setSelectedAdminUserId] = useState<string | null>(null);
+  const [selectedAdminAppId, setSelectedAdminAppId] = useState<string | null>(null);
 
   // User Dashboard / Plan Data State
   const [userData, setUserData] = useState<{
-    profile: { id: string; email: string; display_name?: string; status?: string } | null;
+    profile: { id: string; email: string; display_name?: string; status?: string; country?: string; country_code?: string; phone?: string } | null;
     plan: { name: string; price: number; duration_days: number; card_limit: number } | null;
     cards: Array<any>;
   }>({ profile: null, plan: null, cards: [] });
 
-  const [userTab, setUserTab] = useState<"home" | "my-card" | "preview" | "profile">("home");
+  const [userTab, setUserTab] = useState<"home" | "my-card" | "apply" | "plans" | "profile">("home");
   const [userBlockedMessage, setUserBlockedMessage] = useState("");
 
   // Sync Hash & Route Guards
@@ -177,6 +203,7 @@ export default function App() {
   const isSelectionPage = currentHash === "#/" || currentHash === "" || currentHash === "#";
   const isAdminRoute = currentHash.startsWith("#/admin");
   const isUserLoginRoute = currentHash === "#/login" || currentHash === "#/user/login";
+  const isRegisterRoute = currentHash === "#/register" || currentHash === "#/user/register";
   const isSetupPasswordRoute = currentHash.startsWith("#/setup-password/");
 
   // Public Verification View
@@ -192,10 +219,10 @@ export default function App() {
     };
     const [title, message] = messages[verificationState];
     return (
-      <div className="min-h-screen bg-[#020617] text-white flex items-center justify-center p-6">
-        <div className="max-w-md text-center border border-white/10 bg-white/5 rounded-3xl p-10">
+      <div className={`min-h-screen ${theme === "dark" ? "bg-[#020617] text-white" : "bg-gray-50 text-gray-900"} flex items-center justify-center p-6`}>
+        <div className={`max-w-md text-center border ${theme === "dark" ? "border-white/10 bg-white/5" : "border-gray-200 bg-white"} rounded-3xl p-10`}>
           <h1 className="text-2xl font-black uppercase">{title}</h1>
-          <p className="mt-3 text-sm text-white/50">{message}</p>
+          <p className={`mt-3 text-sm ${theme === "dark" ? "text-white/50" : "text-gray-500"}`}>{message}</p>
           {verificationState !== "loading" && (
             <button
               onClick={() => { window.location.hash = "#/"; window.location.reload(); }}
@@ -210,7 +237,7 @@ export default function App() {
   }
 
   // ----------------------------------------------------
-  // SETUP PASSWORD PAGE (/setup-password/:userId/:email)
+  // SETUP PASSWORD PAGE
   // ----------------------------------------------------
   if (isSetupPasswordRoute) {
     const parts = currentHash.split("/setup-password/");
@@ -229,6 +256,7 @@ export default function App() {
       <LoginSelectionPage
         onSelectAdmin={() => { window.location.hash = "#/admin/login"; }}
         onSelectUser={() => { window.location.hash = "#/login"; }}
+        onRegister={() => { window.location.hash = "#/register"; }}
       />
     );
   }
@@ -243,8 +271,8 @@ export default function App() {
 
     if (adminSession === "checking") {
       return (
-        <div className="min-h-screen bg-[#020617] text-white flex items-center justify-center p-6">
-          <p className="text-xs font-black uppercase tracking-[3px] text-white/40">Checking Admin Authorization...</p>
+        <div className={`min-h-screen ${theme === "dark" ? "bg-[#020617] text-white" : "bg-gray-50 text-gray-900"} flex items-center justify-center p-6`}>
+          <p className={`text-xs font-black uppercase tracking-[3px] ${theme === "dark" ? "text-white/40" : "text-gray-400"}`}>Checking Admin Authorization...</p>
         </div>
       );
     }
@@ -258,7 +286,9 @@ export default function App() {
     if (currentHash === "#/admin/users") activeAdminTab = "users";
     else if (currentHash.startsWith("#/admin/users/")) activeAdminTab = "user-details";
     else if (currentHash === "#/admin/plans") activeAdminTab = "plans";
-    else if (currentHash === "#/admin/create-card") activeAdminTab = "create-card";
+    else if (currentHash === "#/admin/applications") activeAdminTab = "applications";
+    else if (currentHash.startsWith("#/admin/applications/")) activeAdminTab = "application-details";
+    else if (currentHash === "#/admin/notifications") activeAdminTab = "notifications";
     else if (currentHash === "#/admin/cards") activeAdminTab = "cards";
     else if (currentHash === "#/admin/activity") activeAdminTab = "activity";
     else if (currentHash === "#/admin/settings") activeAdminTab = "settings";
@@ -298,7 +328,21 @@ export default function App() {
           />
         )}
         {activeAdminTab === "plans" && <AdminPlans />}
-        {activeAdminTab === "create-card" && <AdminCreateCard />}
+        {activeAdminTab === "applications" && (
+          <AdminApplications
+            onSelectApplication={id => {
+              setSelectedAdminAppId(id);
+              window.location.hash = `#/admin/applications/${id}`;
+            }}
+          />
+        )}
+        {activeAdminTab === "application-details" && (
+          <AdminApplicationDetails
+            applicationId={selectedAdminAppId || currentHash.split("#/admin/applications/")[1] || ""}
+            onBack={() => { window.location.hash = "#/admin/applications"; }}
+          />
+        )}
+        {activeAdminTab === "notifications" && <AdminNotifications />}
         {activeAdminTab === "cards" && <AdminCardsList />}
         {activeAdminTab === "activity" && <AdminActivity />}
         {activeAdminTab === "settings" && <AdminSettings />}
@@ -313,11 +357,18 @@ export default function App() {
     return <UserLogin />;
   }
 
+  // ----------------------------------------------------
+  // 4. USER REGISTER PAGE (/register)
+  // ----------------------------------------------------
+  if (isRegisterRoute) {
+    return <UserRegister />;
+  }
+
   // Check if User is Blocked
   if (userBlockedMessage) {
     return (
-      <div className="min-h-screen bg-[#020617] text-white flex items-center justify-center p-6">
-        <div className="max-w-md text-center border border-red-500/20 bg-red-500/10 rounded-3xl p-10 space-y-4">
+      <div className={`min-h-screen ${theme === "dark" ? "bg-[#020617] text-white" : "bg-gray-50 text-gray-900"} flex items-center justify-center p-6`}>
+        <div className={`max-w-md text-center border border-red-500/20 bg-red-500/10 rounded-3xl p-10 space-y-4`}>
           <span className="text-4xl">🚫</span>
           <h1 className="text-2xl font-black uppercase text-red-400">Account Blocked</h1>
           <p className="text-sm text-white/70">{userBlockedMessage}</p>
@@ -332,13 +383,14 @@ export default function App() {
     );
   }
 
-  // User Guard: if trying to access user pages unauthenticated, show UserLogin
-  if (!currentUser && (currentHash === "#/home" || currentHash === "#/my-card" || currentHash === "#/preview" || currentHash === "#/profile")) {
+  // User Guard
+  const userRoutes = ["#/home", "#/my-card", "#/apply", "#/plans", "#/profile"];
+  if (!currentUser && userRoutes.some(r => currentHash === r || currentHash.startsWith(r + "/"))) {
     return <UserLogin />;
   }
 
   return (
-    <div className="min-h-screen bg-[#020617] text-white selection:bg-amber-500/30">
+    <div className={`min-h-screen ${theme === "dark" ? "bg-[#020617] text-white selection:bg-amber-500/30" : "bg-gray-50 text-gray-900 selection:bg-amber-500/30"}`}>
       <UserNavigation
         activeTab={userTab}
         onTabChange={tab => setUserTab(tab)}
@@ -350,33 +402,39 @@ export default function App() {
 
       <main className="max-w-4xl mx-auto p-6 sm:p-10">
         {userTab === "home" && (
-          <div className="bg-white/5 border border-white/10 rounded-[2.5rem] p-10 text-center space-y-6">
+          <div className={`${theme === "dark" ? "bg-white/5 border-white/10" : "bg-white border-gray-200"} border rounded-[2.5rem] p-10 text-center space-y-6`}>
             <span className="text-xs font-black uppercase tracking-[4px] text-amber-500">Welcome, {userData.profile?.display_name || "User"}</span>
             <h1 className="text-4xl font-black uppercase tracking-tight">Your Digital ID Card</h1>
 
             <div className="pt-4 space-y-4">
               {userData.cards.length > 0 ? (
                 <div className="space-y-4">
-                  <div className="bg-black/30 border border-white/10 px-6 py-4 rounded-2xl inline-block">
-                    <p className="text-[10px] font-black text-white/30 uppercase tracking-widest">Card Status</p>
+                  <div className={`${theme === "dark" ? "bg-black/30 border-white/10" : "bg-gray-100 border-gray-200"} border px-6 py-4 rounded-2xl inline-block`}>
+                    <p className={`text-[10px] font-black ${theme === "dark" ? "text-white/30" : "text-gray-400"} uppercase tracking-widest`}>Card Status</p>
                     <span className="inline-block mt-1 px-3 py-1 bg-emerald-500/10 text-emerald-400 font-black rounded-lg uppercase text-sm">
                       Active
                     </span>
                   </div>
 
-                  <div className="bg-black/30 border border-white/10 px-6 py-4 rounded-2xl inline-block">
+                  <div className={`${theme === "dark" ? "bg-black/30 border-white/10" : "bg-gray-100 border-gray-200"} border px-6 py-4 rounded-2xl inline-block`}>
                     <p className="text-[10px] font-black text-amber-500 uppercase tracking-widest">Current Plan</p>
-                    <p className="font-black text-white text-lg mt-1">{userData.plan?.name || "Basic"}</p>
-                    <p className="text-xs text-white/40 font-semibold">
+                    <p className={`font-black ${theme === "dark" ? "text-white" : "text-gray-900"} text-lg mt-1`}>{userData.plan?.name || "Basic"}</p>
+                    <p className={`text-xs ${theme === "dark" ? "text-white/40" : "text-gray-500"} font-semibold`}>
                       {userData.plan?.card_limit === -1 ? "Unlimited" : `${userData.plan?.card_limit || 100} Cards Limit`}
                     </p>
                   </div>
                 </div>
               ) : (
-                <div className="bg-black/30 border border-white/10 px-8 py-6 rounded-2xl max-w-md mx-auto">
-                  <p className="text-sm text-white/50">
-                    Your ID card has not been created yet. Please contact the administrator.
+                <div className={`${theme === "dark" ? "bg-black/30 border-white/10" : "bg-gray-100 border-gray-200"} border px-8 py-6 rounded-2xl max-w-md mx-auto space-y-3`}>
+                  <p className={`text-sm ${theme === "dark" ? "text-white/50" : "text-gray-500"}`}>
+                    No card issued yet. Create your card application to get started.
                   </p>
+                  <button
+                    onClick={() => setUserTab("apply")}
+                    className="bg-amber-500 text-black px-6 py-2.5 rounded-xl font-black uppercase text-xs tracking-widest hover:bg-amber-400 transition-all"
+                  >
+                    Create ID Card
+                  </button>
                 </div>
               )}
 
@@ -391,13 +449,12 @@ export default function App() {
         )}
 
         {userTab === "my-card" && <UserMyCardPage />}
-
-        {userTab === "preview" && (
-          <div className="text-center py-24 opacity-20 font-black text-4xl uppercase">
-            Select My Card to view your ID card
+        {userTab === "apply" && <UserApplicationForm />}
+        {userTab === "plans" && (
+          <div className={`${theme === "dark" ? "bg-white/5 border-white/10" : "bg-white border-gray-200"} border rounded-[2.5rem] p-10`}>
+            <UserApplicationForm />
           </div>
         )}
-
         {userTab === "profile" && (
           <UserProfilePage
             user={userData.profile}
@@ -407,5 +464,13 @@ export default function App() {
         )}
       </main>
     </div>
+  );
+}
+
+export default function App() {
+  return (
+    <ThemeProvider>
+      <AppInner />
+    </ThemeProvider>
   );
 }

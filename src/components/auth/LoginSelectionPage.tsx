@@ -1,9 +1,10 @@
 interface LoginSelectionPageProps {
   onSelectAdmin: () => void;
   onSelectUser: () => void;
+  onRegister: () => void;
 }
 
-export default function LoginSelectionPage({ onSelectAdmin, onSelectUser }: LoginSelectionPageProps) {
+export default function LoginSelectionPage({ onSelectAdmin, onSelectUser, onRegister }: LoginSelectionPageProps) {
   return (
     <div className="min-h-screen bg-[#020617] text-white flex flex-col items-center justify-center p-6 selection:bg-amber-500/30">
       <div className="w-full max-w-xl text-center space-y-8">
@@ -61,12 +62,18 @@ export default function LoginSelectionPage({ onSelectAdmin, onSelectUser }: Logi
                 Create and manage your own digital ID card and verification QR codes.
               </p>
             </div>
-            <div className="pt-8">
+            <div className="pt-8 space-y-3">
               <button
                 onClick={onSelectUser}
                 className="w-full bg-white text-black font-black uppercase text-xs tracking-widest py-3.5 rounded-xl hover:bg-white/90 transition-all shadow-lg active:scale-95"
               >
                 LOGIN
+              </button>
+              <button
+                onClick={onRegister}
+                className="w-full bg-white/10 text-white font-black uppercase text-xs tracking-widest py-3.5 rounded-xl hover:bg-white/20 transition-all border border-white/10"
+              >
+                REGISTER
               </button>
             </div>
           </div>

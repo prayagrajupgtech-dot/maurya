@@ -45,6 +45,9 @@ export default function PersonDetailView({ data }: { data: VerificationData }) {
       ? "bg-red-500"
       : "bg-amber-500";
 
+  const phoneDigits = data.phone?.replace(/\D/g, "") || "";
+  const callHref = phoneDigits ? `tel:${phoneDigits}` : "#";
+
   return (
     <div className="min-h-screen bg-[#0a0a0a] flex flex-col items-center p-4 sm:p-8 font-sans">
       <div className="w-full max-w-md">
@@ -54,7 +57,7 @@ export default function PersonDetailView({ data }: { data: VerificationData }) {
             <span className="text-xl font-black text-black">M</span>
           </div>
           <h1 className="text-lg font-black tracking-tight uppercase text-white">Maurya Generator</h1>
-          <p className="text-amber-500 font-bold text-[10px] mt-0.5 tracking-[3px]">DIGITAL VERIFICATION</p>
+          <p className="text-amber-500 font-bold text-[10px] mt-0.5 tracking-[3px]">VEHICLE EMERGENCY ID</p>
         </div>
 
         {/* Status Bar */}
@@ -67,6 +70,16 @@ export default function PersonDetailView({ data }: { data: VerificationData }) {
             )}
           </svg>
           <span className="text-[10px] font-black text-white uppercase tracking-[3px]">{statusLabel}</span>
+        </div>
+
+        {/* Emergency Message */}
+        <div className="bg-amber-500/10 border border-amber-500/20 rounded-2xl p-4 mb-6 text-center">
+          <p className="text-xs font-bold text-amber-300">
+            Have you found this vehicle or is the owner involved in an accident?
+          </p>
+          <p className="text-[10px] text-amber-300/60 mt-1">
+            Please contact the registered emergency contact below.
+          </p>
         </div>
 
         {/* Card */}
@@ -90,7 +103,20 @@ export default function PersonDetailView({ data }: { data: VerificationData }) {
 
           {/* Details Section */}
           <div className="p-6 space-y-5">
-            {/* Mobile Number - PROMINENT */}
+            {/* CALL OWNER BUTTON - MOST PROMINENT */}
+            {isActive && data.phone && (
+              <a
+                href={callHref}
+                className="flex items-center justify-center gap-3 bg-emerald-500 hover:bg-emerald-400 text-white py-4 rounded-2xl font-black uppercase text-sm tracking-widest transition-all shadow-xl shadow-emerald-500/20 active:scale-95"
+              >
+                <svg viewBox="0 0 24 24" className="w-5 h-5" fill="currentColor">
+                  <path d="M6.62 10.79c1.44 2.83 3.76 5.14 6.59 6.59l2.2-2.2c.27-.27.67-.36 1.02-.24 1.12.37 2.33.57 3.57.57.55 0 1 .45 1 1V20c0 .55-.45 1-1 1-9.39 0-17-7.61-17-17 0-.55.45-1 1-1h3.5c.55 0 1 .45 1 1 0 1.25.2 2.45.57 3.57.11.35.03.74-.25 1.02l-2.2 2.2z" />
+                </svg>
+                CALL OWNER
+              </a>
+            )}
+
+            {/* Mobile Number */}
             <div className="bg-white/5 rounded-2xl p-4">
               <p className="text-[10px] font-bold text-white/30 uppercase tracking-widest mb-1">Mobile Number</p>
               <p className="text-xl font-black text-amber-400 tracking-widest">{data.phone || "UNAVAILABLE"}</p>
@@ -138,7 +164,7 @@ export default function PersonDetailView({ data }: { data: VerificationData }) {
           {/* Footer */}
           <div className="border-t border-white/5 p-4 text-center">
             <p className="text-[10px] text-white/20 uppercase tracking-widest">{statusDescription}</p>
-            <p className="text-[9px] text-white/10 mt-2 uppercase tracking-wider">Checked at {scanDate}</p>
+            <p className="text-[9px] text-white/10 mt-2 uppercase tracking-wider">Scanned at {scanDate}</p>
           </div>
         </div>
 

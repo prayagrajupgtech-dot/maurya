@@ -1,0 +1,137 @@
+import { jsonResponse, readJsonBody, sha256 } from "./_shared/http.js";
+import { getUserByEmail, saveUser, saveNotification } from "./_shared/store.js";
+import { isSupabaseConfigured, getSupabaseAdmin } from "./_shared/supabase.js";
+
+export default async (request: Request) => {
+  if (request.method !== "POST") {
+    return jsonResponse({ error: "Method not allowed." }, 405);
+  }
+
+  try {
+    const body = await readJsonBody(request);
+
+    const email = typeof body.email === "string" ? body.email.trim().toLowerCase() : "";
+    const password = typeof body.password === "string" ? body.password : "";
+    const display_name = typeof body.display_name === "string" ? body.display_name.trim() : "";
+    const country = typeof body.country === "string" ? body.country.trim() : "";
+    const country_code = typeof body.country_code === "string" ? body.country_code.trim() : "";
+    const phone = typeof body.phone === "string" ? body.phone.trim() : "";
+
+    // Validation
+    if (!email) {
+      return jsonResponse({ error: "Email is required." }, 400);
+    }
+
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      return jsonResponse({ error: "Please enter a valid email address." }, 400);
+    }
+
+    if (!password || password.length < 6) {
+      return jsonResponse({ error: "Password must be at least 6 characters." }, 400);
+    }
+
+    if (!display_name) {
+      return jsonResponse({ error: "Display name is required." }, 400);
+    }
+
+    // Check for duplicate email
+    const existingUser = await getUserByEmail(email);
+    if (existingUser) {
+      return jsonResponse({ error: "An account with this email already exists." }, 409);
+    }
+
+    if (isSupabaseConfigured()) {
+      const supabase = getSupabaseAdmin();
+
+      // Check for duplicate email in Supabase user_profiles
+      const { data: existingProfile } = await supabase
+        .from("user_profiles")
+        .select("id")
+        .eq("email", email)
+        .maybeSingle();
+
+      if (existingProfile) {
+        return jsonResponse({ error: "An account with this email already exists." }, 409);
+      }
+
+      // Create Supabase auth user
+      const { data: authData, error: authError } = await supabase.auth.admin.createUser({
+        email,
+        password,
+        email_confirm: true,
+        user_metadata: { name: display_name }
+      });
+
+      if (authError) {
+        console.error("user-register createUser error", authError);
+        return jsonResponse({ error: authError.message || "Failed to create account." }, 500);
+      }
+
+      // Create user_profiles record
+      await supabase.from("user_profiles").insert({
+        id: authData.user.id,
+        email,
+        display_name,
+        phone,
+        country,
+        country_code,
+        role: "user",
+        status: "active",
+        password_configured: true,
+        password_hash: await sha256(password),
+        last_login_at: new Date().toISOString()
+      });
+
+      // Create notification
+      await saveNotification({
+        type: "new_user",
+        title: "New User Registered",
+        message: `${display_name} (${email}) has registered a new account.`,
+        related_user_id: authData.user.id,
+        read: false
+      });
+
+      return jsonResponse({
+        success: true,
+        user: {
+          id: authData.user.id,
+          email,
+          display_name
+        }
+      }, 201);
+    }
+
+    // Local store fallback
+    const newUser = await saveUser({
+      email,
+      display_name,
+      phone,
+      country,
+      country_code,
+      role: "user",
+      status: "active",
+      password_hash: await sha256(password)
+    });
+
+    // Create notification
+    await saveNotification({
+      type: "new_user",
+      title: "New User Registered",
+      message: `${display_name} (${email}) has registered a new account.`,
+      related_user_id: newUser.id,
+      read: false
+    });
+
+    return jsonResponse({
+      success: true,
+      user: {
+        id: newUser.id,
+        email,
+        display_name
+      }
+    }, 201);
+  } catch (error) {
+    console.error("user-register error", error);
+    return jsonResponse({ error: "Registration failed." }, 500);
+  }
+};

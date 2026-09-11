@@ -253,8 +253,14 @@ export default function UserLogin() {
           )}
         </div>
 
-        {/* Switch to Admin */}
-        <div className="text-center">
+        {/* Switch to Admin + Register */}
+        <div className="text-center space-y-2">
+          <p className="text-xs text-white/40">
+            Don't have an account?{" "}
+            <button onClick={() => { window.location.hash = "#/register"; }} className="text-amber-500 font-black uppercase hover:underline">
+              Register
+            </button>
+          </p>
           <button
             onClick={() => { window.location.hash = "#/admin/login"; }}
             className="text-xs font-black uppercase tracking-widest text-white/40 hover:text-white transition-colors"

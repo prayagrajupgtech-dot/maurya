@@ -4,8 +4,10 @@ export interface PlanRecord {
   id: string;
   name: string;
   price: number;
+  currency?: string;
   duration_days: number;
   card_limit: number; // -1 for unlimited
+  features?: string[];
   status: "active" | "inactive";
   created_at: string;
   updated_at: string;
@@ -16,13 +18,62 @@ export interface UserRecord {
   email: string;
   display_name: string;
   phone: string;
+  country?: string;
+  country_code?: string;
   password_hash?: string;
   role: "admin" | "user";
-  status: "active" | "blocked" | "deleted";
+  status: "active" | "blocked" | "deleted" | "pending";
   plan_id: string | null;
   last_login_at: string | null;
   created_at: string;
   updated_at: string;
+}
+
+export interface CardApplicationRecord {
+  id: string;
+  user_id: string;
+  plan_id: string | null;
+  full_name: string;
+  phone: string;
+  country: string;
+  country_code: string;
+  date_of_birth: string | null;
+  address: string;
+  email: string;
+  photo_url: string | null;
+  completion_percentage: number;
+  status: "draft" | "incomplete" | "completed" | "submitted" | "payment_pending" | "payment_success" | "payment_failed" | "card_issued" | "card_active" | "card_suspended" | "cancelled";
+  submitted_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PaymentRecord {
+  id: string;
+  user_id: string | null;
+  application_id: string | null;
+  plan_id: string | null;
+  order_id: string | null;
+  transaction_id: string | null;
+  amount: number;
+  currency: string;
+  status: "created" | "pending" | "success" | "failed" | "cancelled" | "refunded";
+  gateway: string;
+  gateway_response?: any;
+  verified: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface NotificationRecord {
+  id: string;
+  type: "new_user" | "application_started" | "application_submitted" | "payment_success" | "payment_failed" | "card_issued";
+  title: string;
+  message: string;
+  related_user_id: string | null;
+  related_application_id: string | null;
+  read: boolean;
+  created_at: string;
 }
 
 export interface CardRecord {
@@ -33,9 +84,16 @@ export interface CardRecord {
   date_of_birth: string;
   address: string;
   photo_url?: string;
+  country?: string;
+  country_code?: string;
   user_id?: string | null;
+  application_id?: string | null;
   plan_id?: string | null;
+  payment_id?: string | null;
+  qr_token?: string | null;
   status: "active" | "expired" | "blocked";
+  issued_at?: string | null;
+  expires_at?: string | null;
   created_at: string;
 }
 
@@ -350,4 +408,220 @@ export async function logAdminAction(action: string, adminId: string, targetUser
     }
   }
   mockLogs.push(log);
+}
+
+// --- CARD APPLICATIONS ---
+export async function getApplicationsByUserId(userId: string): Promise<CardApplicationRecord[]> {
+  if (isSupabaseConfigured()) {
+    try {
+      const supabase = getSupabaseAdmin();
+      const { data, error } = await supabase
+        .from("card_applications")
+        .select("*")
+        .eq("user_id", userId)
+        .order("created_at", { ascending: false });
+      if (!error && data) return data as CardApplicationRecord[];
+    } catch (e) { console.warn("Supabase fetch applications failed", e); }
+  }
+  return [];
+}
+
+export async function getApplicationById(appId: string): Promise<CardApplicationRecord | null> {
+  if (isSupabaseConfigured()) {
+    try {
+      const supabase = getSupabaseAdmin();
+      const { data, error } = await supabase
+        .from("card_applications")
+        .select("*")
+        .eq("id", appId)
+        .maybeSingle();
+      if (!error && data) return data as CardApplicationRecord;
+    } catch (e) { console.warn("Supabase fetch application failed", e); }
+  }
+  return null;
+}
+
+export async function getAllApplications(): Promise<CardApplicationRecord[]> {
+  if (isSupabaseConfigured()) {
+    try {
+      const supabase = getSupabaseAdmin();
+      const { data, error } = await supabase
+        .from("card_applications")
+        .select("*")
+        .order("created_at", { ascending: false });
+      if (!error && data) return data as CardApplicationRecord[];
+    } catch (e) { console.warn("Supabase fetch all applications failed", e); }
+  }
+  return [];
+}
+
+export async function saveApplication(app: Partial<CardApplicationRecord>): Promise<CardApplicationRecord> {
+  const now = new Date().toISOString();
+  if (isSupabaseConfigured()) {
+    try {
+      const supabase = getSupabaseAdmin();
+      if (app.id) {
+        const { data, error } = await supabase
+          .from("card_applications")
+          .update({ ...app, updated_at: now })
+          .eq("id", app.id)
+          .select()
+          .single();
+        if (!error && data) return data as CardApplicationRecord;
+      } else {
+        const { data, error } = await supabase
+          .from("card_applications")
+          .insert([{ ...app, created_at: now, updated_at: now }])
+          .select()
+          .single();
+        if (!error && data) return data as CardApplicationRecord;
+      }
+    } catch (e) { console.warn("Supabase save application failed", e); }
+  }
+  return app as CardApplicationRecord;
+}
+
+// --- PAYMENTS ---
+export async function getPaymentsByUserId(userId: string): Promise<PaymentRecord[]> {
+  if (isSupabaseConfigured()) {
+    try {
+      const supabase = getSupabaseAdmin();
+      const { data, error } = await supabase
+        .from("payments")
+        .select("*")
+        .eq("user_id", userId)
+        .order("created_at", { ascending: false });
+      if (!error && data) return data as PaymentRecord[];
+    } catch (e) { console.warn("Supabase fetch payments failed", e); }
+  }
+  return [];
+}
+
+export async function getPaymentByOrderId(orderId: string): Promise<PaymentRecord | null> {
+  if (isSupabaseConfigured()) {
+    try {
+      const supabase = getSupabaseAdmin();
+      const { data, error } = await supabase
+        .from("payments")
+        .select("*")
+        .eq("order_id", orderId)
+        .maybeSingle();
+      if (!error && data) return data as PaymentRecord;
+    } catch (e) { console.warn("Supabase fetch payment failed", e); }
+  }
+  return null;
+}
+
+export async function getPaymentById(paymentId: string): Promise<PaymentRecord | null> {
+  if (isSupabaseConfigured()) {
+    try {
+      const supabase = getSupabaseAdmin();
+      const { data, error } = await supabase
+        .from("payments")
+        .select("*")
+        .eq("id", paymentId)
+        .maybeSingle();
+      if (!error && data) return data as PaymentRecord;
+    } catch (e) { console.warn("Supabase fetch payment by id failed", e); }
+  }
+  return null;
+}
+
+export async function getAllPayments(): Promise<PaymentRecord[]> {
+  if (isSupabaseConfigured()) {
+    try {
+      const supabase = getSupabaseAdmin();
+      const { data, error } = await supabase
+        .from("payments")
+        .select("*")
+        .order("created_at", { ascending: false });
+      if (!error && data) return data as PaymentRecord[];
+    } catch (e) { console.warn("Supabase fetch all payments failed", e); }
+  }
+  return [];
+}
+
+export async function savePayment(payment: Partial<PaymentRecord>): Promise<PaymentRecord> {
+  const now = new Date().toISOString();
+  if (isSupabaseConfigured()) {
+    try {
+      const supabase = getSupabaseAdmin();
+      if (payment.id) {
+        const { data, error } = await supabase
+          .from("payments")
+          .update({ ...payment, updated_at: now })
+          .eq("id", payment.id)
+          .select()
+          .single();
+        if (!error && data) return data as PaymentRecord;
+      } else {
+        const { data, error } = await supabase
+          .from("payments")
+          .insert([{ ...payment, created_at: now, updated_at: now }])
+          .select()
+          .single();
+        if (!error && data) return data as PaymentRecord;
+      }
+    } catch (e) { console.warn("Supabase save payment failed", e); }
+  }
+  return payment as PaymentRecord;
+}
+
+// --- NOTIFICATIONS ---
+export async function getNotifications(): Promise<NotificationRecord[]> {
+  if (isSupabaseConfigured()) {
+    try {
+      const supabase = getSupabaseAdmin();
+      const { data, error } = await supabase
+        .from("notifications")
+        .select("*")
+        .order("created_at", { ascending: false })
+        .limit(50);
+      if (!error && data) return data as NotificationRecord[];
+    } catch (e) { console.warn("Supabase fetch notifications failed", e); }
+  }
+  return [];
+}
+
+export async function getUnreadNotificationCount(): Promise<number> {
+  if (isSupabaseConfigured()) {
+    try {
+      const supabase = getSupabaseAdmin();
+      const { count, error } = await supabase
+        .from("notifications")
+        .select("*", { count: "exact", head: true })
+        .eq("read", false);
+      if (!error && count !== null) return count;
+    } catch (e) { console.warn("Supabase count notifications failed", e); }
+  }
+  return 0;
+}
+
+export async function saveNotification(notification: Partial<NotificationRecord>): Promise<NotificationRecord> {
+  const now = new Date().toISOString();
+  if (isSupabaseConfigured()) {
+    try {
+      const supabase = getSupabaseAdmin();
+      const { data, error } = await supabase
+        .from("notifications")
+        .insert([{ ...notification, created_at: now }])
+        .select()
+        .single();
+      if (!error && data) return data as NotificationRecord;
+    } catch (e) { console.warn("Supabase save notification failed", e); }
+  }
+  return notification as NotificationRecord;
+}
+
+export async function markNotificationsRead(ids?: string[]): Promise<void> {
+  if (isSupabaseConfigured()) {
+    try {
+      const supabase = getSupabaseAdmin();
+      if (ids && ids.length > 0) {
+        await supabase.from("notifications").update({ read: true }).in("id", ids);
+      } else {
+        await supabase.from("notifications").update({ read: true }).eq("read", false);
+      }
+    } catch (e) { console.warn("Supabase mark notifications read failed", e); }
+  }
 }
