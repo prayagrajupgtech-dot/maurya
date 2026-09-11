@@ -3,7 +3,6 @@ const RESEND_API_URL = "https://api.resend.com/emails";
 export async function sendOtpEmail(email: string, otp: string): Promise<{ success: boolean; error?: string }> {
   const apiKey = process.env.RESEND_API_KEY?.trim();
   const fromEmail = process.env.RESEND_FROM_EMAIL?.trim() || "noreply@mauryaandco.com";
-  const siteUrl = process.env.VITE_PUBLIC_SITE_URL || "http://localhost:5173";
 
   if (!apiKey) {
     console.error("RESEND_API_KEY is not configured.");

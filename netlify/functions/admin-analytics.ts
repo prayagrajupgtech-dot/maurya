@@ -57,8 +57,6 @@ export default async (request: Request) => {
   const month = parseInt(url.searchParams.get("month") || String(new Date().getMonth()));
 
   const now = new Date();
-  const currentYear = now.getFullYear();
-  const currentMonth = now.getMonth();
 
   // Compute date boundaries using [start, end) pattern
   let startDate: Date;

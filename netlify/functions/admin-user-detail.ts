@@ -94,7 +94,7 @@ export default async (request: Request) => {
   if (request.method === "PATCH") {
     try {
       const body = await readJsonBody(request);
-      const targetId = body.id || userId;
+      const targetId = (typeof body.id === "string" ? body.id : null) || userId;
       if (!targetId) return jsonResponse({ error: "User ID is required." }, 400);
 
       if (isSupabaseConfigured()) {

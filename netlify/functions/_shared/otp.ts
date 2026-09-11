@@ -2,7 +2,6 @@ import { randomInt } from "node:crypto";
 import { sha256 } from "./http.js";
 import { getSupabaseAdmin, isSupabaseConfigured } from "./supabase.js";
 
-const OTP_LENGTH = 6;
 const OTP_EXPIRY_SECONDS = 5 * 60; // 5 minutes
 const MAX_ATTEMPTS = 5;
 const RESEND_COOLDOWN_SECONDS = 60;

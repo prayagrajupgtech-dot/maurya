@@ -1,7 +1,6 @@
 import { jsonResponse } from "./_shared/http.js";
 import { requireAdmin } from "./_shared/admin-auth.js";
 import { getAllUsers, getAllCards, getAllPlans, getLogs, getAllApplications, getAllPayments, getUnreadNotificationCount } from "./_shared/store.js";
-import { getSupabaseAdmin, isSupabaseConfigured } from "./_shared/supabase.js";
 
 export default async (request: Request) => {
   if (request.method !== "GET") {

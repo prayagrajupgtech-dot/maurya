@@ -1,7 +1,7 @@
 import { jsonResponse, readJsonBody, sha256 } from "./_shared/http.js";
 import { getSupabaseAdmin, isSupabaseConfigured } from "./_shared/supabase.js";
 import { isAdminRequest } from "./_shared/admin-auth.js";
-import { getUserById, getPlanById, getCardsByUserId, addCard } from "./_shared/store.js";
+import { addCard } from "./_shared/store.js";
 
 function validateCard(body: Record<string, unknown>) {
   const name = typeof body.name === "string" ? body.name.trim() : "";

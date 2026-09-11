@@ -1,5 +1,4 @@
 import { jsonResponse, readJsonBody } from "./_shared/http.js";
-import { getSupabaseAdmin, isSupabaseConfigured } from "./_shared/supabase.js";
 import { verifyUserSession } from "./user-session.js";
 import {
   getApplicationsByUserId,

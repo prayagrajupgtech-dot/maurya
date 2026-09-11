@@ -20,9 +20,9 @@ export default async (request: Request) => {
     try {
       const body = await readJsonBody(request);
       const name = typeof body.name === "string" ? body.name.trim() : "";
-      const price = typeof body.price === "number" ? body.price : parseFloat(body.price || 0);
-      const duration_days = typeof body.duration_days === "number" ? body.duration_days : parseInt(body.duration_days || 30, 10);
-      const card_limit = typeof body.card_limit === "number" ? body.card_limit : parseInt(body.card_limit || 100, 10);
+      const price = typeof body.price === "number" ? body.price : parseFloat(String(body.price ?? "0"));
+      const duration_days = typeof body.duration_days === "number" ? body.duration_days : parseInt(String(body.duration_days ?? "30"), 10);
+      const card_limit = typeof body.card_limit === "number" ? body.card_limit : parseInt(String(body.card_limit ?? "100"), 10);
       const status = body.status === "inactive" ? "inactive" : "active";
 
       if (!name) return jsonResponse({ error: "Plan name is required." }, 400);
