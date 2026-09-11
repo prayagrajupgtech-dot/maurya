@@ -1,6 +1,7 @@
 import { ReactNode } from "react";
 import AdminSidebar from "./AdminSidebar";
 import AdminHeader from "./AdminHeader";
+import { useTheme } from "../../App";
 
 interface AdminLayoutProps {
   children: ReactNode;
@@ -19,8 +20,11 @@ export default function AdminLayout({
   onNavigate,
   onLogout
 }: AdminLayoutProps) {
+  const { theme } = useTheme();
+  const isDark = theme === "dark";
+
   return (
-    <div className="min-h-screen bg-[#020617] text-white flex">
+    <div className={`min-h-screen flex ${isDark ? "bg-[#020617] text-white" : "bg-gray-50 text-gray-900"}`}>
       <AdminSidebar currentTab={currentTab} onNavigate={onNavigate} onLogout={onLogout} />
       <div className="flex-1 flex flex-col min-w-0">
         <AdminHeader title={title} subtitle={subtitle} />
